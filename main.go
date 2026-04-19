@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -337,14 +338,42 @@ func (ls *SprintStrategy) HandleEvent(ctx context.Context, invite Invite, phase 
 	return nil
 }
 
-func main() {
-	fmt.Println("Invite application starting...")
+func setupLogger(cfg *config.Config) {
+	var level slog.Level
+	switch strings.ToLower(cfg.LogLevel) {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		level = slog.LevelInfo
+	}
 
+	opts := &slog.HandlerOptions{
+		Level: level,
+	}
+
+	var handler slog.Handler
+	if strings.ToLower(cfg.LogFormat) == "json" {
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	}
+
+	slog.SetDefault(slog.New(handler))
+}
+
+func main() {
 	// 1. Load Configuration
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Configuration error: %v", err)
 	}
+
+	setupLogger(cfg)
+	slog.Info("Invite application starting...", slog.Int("port", cfg.Port))
 
 	// 2. Setup Graceful Shutdown Context
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -353,17 +382,20 @@ func main() {
 	// 3. Initialize Database
 	dbConn, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("Failed to connect to db: %v", err)
+		slog.Error("Failed to connect to db", slog.Any("error", err))
+		os.Exit(1)
 	}
 	defer dbConn.Close()
 
 	if err := dbConn.Ping(); err != nil {
-		log.Fatalf("Failed to ping db: %v", err)
+		slog.Error("Failed to ping db", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	// Run migrations
 	if err := db.Migrate(ctx, dbConn); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
+		slog.Error("Failed to run migrations", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	app := &App{
@@ -392,7 +424,8 @@ func main() {
 	// Add request validation middleware
 	swagger, err := api.GetSwagger()
 	if err != nil {
-		log.Fatalf("Error loading swagger spec: %v", err)
+		slog.Error("Error loading swagger spec", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	validator := middleware.OapiRequestValidator(swagger)(mux)
@@ -414,13 +447,13 @@ func main() {
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		fmt.Println("Starting Orchestrator...")
+		slog.Info("Starting Orchestrator...")
 		return app.RunOrchestrator(gCtx)
 	})
 
 	// 6. Start HTTP Server
 	g.Go(func() error {
-		fmt.Printf("API server listening on :%d\n", cfg.Port)
+		slog.Info("API server listening", slog.Int("port", cfg.Port))
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("HTTP server error: %w", err)
 		}
@@ -429,20 +462,20 @@ func main() {
 
 	// 7. Wait for Shutdown Signal
 	<-ctx.Done()
-	fmt.Println("\nShutdown signal received, shutting down gracefully...")
+	slog.Info("Shutdown signal received, shutting down gracefully...")
 
 	// Create a timeout context for the HTTP server shutdown
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		fmt.Printf("HTTP server shutdown error: %v\n", err)
+		slog.Error("HTTP server shutdown error", slog.Any("error", err))
 	}
 
 	// Wait for background tasks (like orchestrator) to finish
 	if err := g.Wait(); err != nil {
-		fmt.Printf("Error during shutdown: %v\n", err)
+		slog.Error("Error during shutdown", slog.Any("error", err))
 	}
 
-	fmt.Println("Application stopped gracefully.")
+	slog.Info("Application stopped gracefully.")
 }
