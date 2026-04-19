@@ -72,7 +72,7 @@ func (s *Server) ListPersons(ctx context.Context, request ListPersonsRequestObje
 		return nil, err
 	}
 
-	var res []Person
+	res := []Person{}
 	for _, p := range persons {
 		res = append(res, Person{
 			Id:    p.ID,
@@ -159,7 +159,7 @@ func (s *Server) ListGroups(ctx context.Context, request ListGroupsRequestObject
 		return nil, err
 	}
 
-	var res []Group
+	res := []Group{}
 	for _, g := range groups {
 		res = append(res, Group{
 			Id:          g.ID,
@@ -288,7 +288,7 @@ func (s *Server) ListInvites(ctx context.Context, request ListInvitesRequestObje
 		return nil, err
 	}
 
-	var res []Invite
+	res := []Invite{}
 	for _, i := range invites {
 		res = append(res, Invite{
 			Id:          i.ID,
@@ -411,7 +411,7 @@ func (s *Server) ListInvitePhases(ctx context.Context, request ListInvitePhasesR
 		return nil, err
 	}
 
-	var res []InvitePhase
+	res := []InvitePhase{}
 	for _, p := range phases {
 		var cfg map[string]interface{}
 		json.Unmarshal(p.StrategyConfig, &cfg)
