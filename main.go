@@ -14,14 +14,21 @@ import (
 )
 
 type Invite struct {
-	ID          uuid.UUID // Primary key
-	Title       string    //Allowed to be blank (will be displayed as "New invite", can be edited later)
-	Description string    //Allowed to be blank
-	From        time.Time // Not null
+	ID          uuid.UUID
+	Title       string
+	Description string
+	From        time.Time
 	To          time.Time
 	Duration    time.Duration
-	CreatedAt   time.Time // Not null
-	// Can be created with only from and to, or from and duration. to or duration must be present.
+	CreatedAt   time.Time
+	Status      string // pending, active, completed, cancelled
+}
+
+type PhaseState struct {
+	PhaseID     uuid.UUID
+	Status      string // active, completed, failed
+	NextCheckAt *time.Time
+	Data        json.RawMessage
 }
 
 type App struct {
@@ -103,10 +110,16 @@ const (
 	StrategyKindSprint StrategyKind = "sprint"
 )
 
+type Event struct {
+	Kind      string // e.g., "invitee_declined"
+	InviteeID uuid.UUID
+}
+
 type Strategy interface {
 	Kind() StrategyKind
-	Status() string                                   // Status to be displayed
-	Execute(ctx context.Context, invite Invite) error // Starts the sending process for a given strategy
+	Execute(ctx context.Context, invite Invite, phase Phase) error
+	Resume(ctx context.Context, invite Invite, phase Phase, state *PhaseState) error
+	HandleEvent(ctx context.Context, invite Invite, phase Phase, state *PhaseState, event Event) error
 }
 
 // Factory function to turn DB data into usable logic
@@ -146,12 +159,16 @@ func (ls *LadderStrategy) Kind() StrategyKind {
 	return StrategyKindLadder
 }
 
-func (ls *LadderStrategy) Status() string {
-	return "pending"
+func (ls *LadderStrategy) Execute(ctx context.Context, invite Invite, phase Phase) error {
+	return errors.New("Not implemented")
 }
 
-func (ls *LadderStrategy) Execute(ctx context.Context, invite Invite) error {
-	return errors.New("Not implemented")
+func (ls *LadderStrategy) Resume(ctx context.Context, invite Invite, phase Phase, state *PhaseState) error {
+	return nil
+}
+
+func (ls *LadderStrategy) HandleEvent(ctx context.Context, invite Invite, phase Phase, state *PhaseState, event Event) error {
+	return nil
 }
 
 type SprintStrategy struct {
@@ -165,11 +182,7 @@ func (ls *SprintStrategy) Kind() StrategyKind {
 	return StrategyKindSprint
 }
 
-func (ls *SprintStrategy) Status() string {
-	return "pending"
-}
-
-func (ls *SprintStrategy) Execute(ctx context.Context, invite Invite) error {
+func (ls *SprintStrategy) Execute(ctx context.Context, invite Invite, phase Phase) error {
 	g, gCtx := errgroup.WithContext(ctx)
 
 	jobs := make(chan uuid.UUID, len(ls.Recipients))
@@ -204,6 +217,14 @@ func (ls *SprintStrategy) Execute(ctx context.Context, invite Invite) error {
 	close(jobs)
 
 	return g.Wait()
+}
+
+func (ls *SprintStrategy) Resume(ctx context.Context, invite Invite, phase Phase, state *PhaseState) error {
+	return nil
+}
+
+func (ls *SprintStrategy) HandleEvent(ctx context.Context, invite Invite, phase Phase, state *PhaseState, event Event) error {
+	return nil
 }
 
 func main() {
