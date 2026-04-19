@@ -137,6 +137,32 @@ func (app *App) StartInviteProcess(ctx context.Context, inviteID uuid.UUID) erro
 	return nil
 }
 
+func (app *App) GetPhaseProgress(ctx context.Context, row db.GetActivePhaseForInviteRow) (string, error) {
+	phase := Phase{
+		ID:             row.PhaseID,
+		InviteID:       row.InviteID,
+		Order:          int(row.Order),
+		StrategyKind:   row.StrategyKind,
+		StrategyConfig: row.StrategyConfig,
+	}
+
+	state := &PhaseState{
+		PhaseID:     row.PhaseID,
+		Status:      row.PhaseStatus,
+		Data:        row.PhaseData,
+	}
+	if row.NextCheckAt.Valid {
+		state.NextCheckAt = &row.NextCheckAt.Time
+	}
+
+	strategy, err := LoadStrategy(app, phase)
+	if err != nil {
+		return "", err
+	}
+
+	return strategy.Progress(state), nil
+}
+
 type Person = db.Person
 
 type Group struct {
@@ -490,6 +516,7 @@ func main() {
 	server := &api.Server{
 		Queries:         app.Queries,
 		StartInviteFunc: app.StartInviteProcess,
+		GetProgressFunc: app.GetPhaseProgress,
 	}
 	strictHandler := api.NewStrictHandler(server, nil)
 	mux := http.NewServeMux()

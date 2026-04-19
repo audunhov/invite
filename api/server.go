@@ -16,6 +16,7 @@ import (
 type Server struct {
 	Queries         *db.Queries
 	StartInviteFunc func(ctx context.Context, inviteID uuid.UUID) error
+	GetProgressFunc func(ctx context.Context, phase db.GetActivePhaseForInviteRow) (string, error)
 }
 
 var _ StrictServerInterface = (*Server)(nil)
@@ -478,4 +479,72 @@ func (s *Server) StartInvite(ctx context.Context, request StartInviteRequestObje
 	}
 
 	return StartInvite200Response{}, nil
+}
+
+func (s *Server) GetInviteStatus(ctx context.Context, request GetInviteStatusRequestObject) (GetInviteStatusResponseObject, error) {
+	// 1. Get Overall Invite
+	i, err := s.Queries.GetInvite(ctx, request.Id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return GetInviteStatus404Response{}, nil
+		}
+		return nil, err
+	}
+
+	resp := InviteStatusReport{
+		InviteId:      i.ID,
+		OverallStatus: i.Status,
+	}
+
+	// 2. Get Active Phase details (if active)
+	if i.Status == "active" {
+		activeRow, err := s.Queries.GetActivePhaseForInvite(ctx, i.ID)
+		if err == nil {
+			progressMsg := "Processing"
+			if s.GetProgressFunc != nil {
+				msg, pErr := s.GetProgressFunc(ctx, activeRow)
+				if pErr == nil {
+					progressMsg = msg
+				}
+			}
+
+			resp.ActivePhase = &struct {
+				Id              *uuid.UUID "json:\"id,omitempty\""
+				NextCheckAt     *time.Time "json:\"next_check_at,omitempty\""
+				Order           *int       "json:\"order,omitempty\""
+				ProgressMessage *string    "json:\"progress_message,omitempty\""
+				StrategyKind    *string    "json:\"strategy_kind,omitempty\""
+			}{
+				Id:              &activeRow.PhaseID,
+				NextCheckAt:     toTimePtr(activeRow.NextCheckAt),
+				Order:           toIntPtr(sql.NullInt64{Int64: int64(activeRow.Order), Valid: true}),
+				StrategyKind:    &activeRow.StrategyKind,
+				ProgressMessage: &progressMsg,
+			}
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+
+	// 3. Get Pending Invitees
+	pendingRows, err := s.Queries.GetPendingInvitees(ctx, i.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	var pending []PendingInvitee
+	for _, pr := range pendingRows {
+		pending = append(pending, PendingInvitee{
+			Id:        pr.ID,
+			Email:     types.Email(pr.Email),
+			Name:      pr.Name,
+			InvitedAt: pr.InvitedAt,
+		})
+	}
+
+	if len(pending) > 0 {
+		resp.PendingInvitees = &pending
+	}
+
+	return GetInviteStatus200JSONResponse(resp), nil
 }
