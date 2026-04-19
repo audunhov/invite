@@ -11,7 +11,8 @@
     "type-check": "vue-tsc --build",
     "lint": "run-s lint:*",
     "lint:oxlint": "oxlint . --fix",
-    "lint:eslint": "eslint . --fix --cache"
+    "lint:eslint": "eslint . --fix --cache",
+    "generate-api": "openapi-typescript ../api/openapi.yaml -o ./src/api-types.d.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
@@ -31,6 +32,7 @@
     "eslint-plugin-vue": "~10.8.0",
     "jiti": "^2.6.1",
     "npm-run-all2": "^8.0.4",
+    "openapi-typescript": "^7.13.0",
     "oxlint": "~1.60.0",
     "typescript": "~6.0.0",
     "vite": "^8.0.8",
