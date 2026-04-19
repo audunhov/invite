@@ -39,6 +39,23 @@ func (q *Queries) CreateInvitee(ctx context.Context, arg CreateInviteeParams) er
 	return err
 }
 
+const createPerson = `-- name: CreatePerson :one
+INSERT INTO persons (id, email, name) VALUES ($1, $2, $3) RETURNING id, email, name
+`
+
+type CreatePersonParams struct {
+	ID    uuid.UUID `json:"id"`
+	Email string    `json:"email"`
+	Name  string    `json:"name"`
+}
+
+func (q *Queries) CreatePerson(ctx context.Context, arg CreatePersonParams) (Person, error) {
+	row := q.db.QueryRowContext(ctx, createPerson, arg.ID, arg.Email, arg.Name)
+	var i Person
+	err := row.Scan(&i.ID, &i.Email, &i.Name)
+	return i, err
+}
+
 const createPhaseState = `-- name: CreatePhaseState :exec
 INSERT INTO invite_phase_state (phase_id, status, next_check_at, data)
 VALUES ($1, $2, $3, $4)
@@ -168,6 +185,33 @@ func (q *Queries) GetPerson(ctx context.Context, id uuid.UUID) (Person, error) {
 	var i Person
 	err := row.Scan(&i.ID, &i.Email, &i.Name)
 	return i, err
+}
+
+const listPersons = `-- name: ListPersons :many
+SELECT id, email, name FROM persons
+`
+
+func (q *Queries) ListPersons(ctx context.Context) ([]Person, error) {
+	rows, err := q.db.QueryContext(ctx, listPersons)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Person
+	for rows.Next() {
+		var i Person
+		if err := rows.Scan(&i.ID, &i.Email, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const resolveRecipients = `-- name: ResolveRecipients :many

@@ -1,6 +1,12 @@
 -- name: GetPerson :one
 SELECT * FROM persons WHERE id = $1;
 
+-- name: CreatePerson :one
+INSERT INTO persons (id, email, name) VALUES ($1, $2, $3) RETURNING *;
+
+-- name: ListPersons :many
+SELECT * FROM persons;
+
 -- name: GetActivePhasesToProcess :many
 SELECT 
     p.id AS phase_id,
