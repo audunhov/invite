@@ -268,6 +268,27 @@ paths:
         '404':
           description: Invite not found
 
+  /invites/{id}/status:
+    get:
+      summary: Get current progress and pending invitees
+      operationId: GetInviteStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Invite status report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteStatusReport'
+        '404':
+          description: Invite not found
+
   /groups:
     get:
       summary: List all groups
@@ -546,6 +567,52 @@ components:
           enum: [ladder, sprint]
         strategy_config:
           type: object
+
+    InviteStatusReport:
+      type: object
+      required: [invite_id, overall_status]
+      properties:
+        invite_id:
+          type: string
+          format: uuid
+        overall_status:
+          type: string
+        active_phase:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            order:
+              type: integer
+            strategy_kind:
+              type: string
+            progress_message:
+              type: string
+              description: Human-readable progress from the strategy
+            next_check_at:
+              type: string
+              format: date-time
+        pending_invitees:
+          type: array
+          items:
+            $ref: '#/components/schemas/PendingInvitee'
+
+    PendingInvitee:
+      type: object
+      required: [id, email, name, invited_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        invited_at:
+          type: string
+          format: date-time
 
     Group:
       type: object
