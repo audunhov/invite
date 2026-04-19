@@ -239,7 +239,7 @@ import { RouterLink, RouterView } from 'vue-router'
       </el-disclosure>
     </nav>
 
-    <div class="py-10">
+    <div class="py-10 bg-white dark:bg-gray-900 min-h-screen text-gray-900 dark:text-white">
       <header>
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <h1 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Dashboard</h1>

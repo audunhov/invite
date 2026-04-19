@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+@layer base {
+  :root {
+    background-color: white;
+    color: #111827; /* gray-900 */
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      background-color: #111827; /* gray-900 */
+      color: white;
+    }
+  }
+}
