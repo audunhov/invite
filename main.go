@@ -23,6 +23,7 @@ import (
 	"invite/db"
 
 	middleware "github.com/oapi-codegen/nethttp-middleware"
+	"github.com/swaggest/swgui/v5emb"
 )
 
 type Invite struct {
@@ -374,6 +375,18 @@ func main() {
 	strictHandler := api.NewStrictHandler(server, nil)
 	mux := http.NewServeMux()
 	api.HandlerFromMux(strictHandler, mux)
+
+	mux.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, r *http.Request) {
+		swagger, err := api.GetSwagger()
+		if err != nil {
+			http.Error(w, "Failed to load swagger spec", http.StatusInternalServerError)
+			return
+		}
+		data, _ := swagger.MarshalJSON()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+	})
+	mux.Handle("GET /swagger/", v5emb.New("Invite API", "/openapi.json", "/swagger/"))
 
 	// Add request validation middleware
 	swagger, err := api.GetSwagger()

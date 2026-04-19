@@ -10,6 +10,7 @@ require (
 	github.com/oapi-codegen/nethttp-middleware v1.1.2
 	github.com/oapi-codegen/runtime v1.4.0
 	github.com/pressly/goose/v3 v3.27.0
+	github.com/swaggest/swgui v1.8.7
 	golang.org/x/sync v0.20.0
 )
 
@@ -26,6 +27,7 @@ require (
 	github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
 	github.com/sethvargo/go-retry v0.3.0 // indirect
+	github.com/vearutop/statigz v1.4.0 // indirect
 	github.com/woodsbury/decimal128 v1.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
