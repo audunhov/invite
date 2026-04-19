@@ -547,10 +547,13 @@ func main() {
 	api.HandlerFromMux(strictHandler, apiMux)
 
 	// Mount API at /api/ with validation
+	// Note: The validator must see the /api prefix to match the servers block in openapi.yaml
 	validator := middleware.OapiRequestValidatorWithOptions(swagger, &middleware.Options{
 		SilenceServersWarning: true,
 	})
-	mux.Handle("/api/", http.StripPrefix("/api", validator(apiMux)))
+	
+	apiHandler := validator(http.StripPrefix("/api", apiMux))
+	mux.Handle("/api/", apiHandler)
 
 	// 3. Frontend (catch-all)
 	serveFrontend(mux)
