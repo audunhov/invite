@@ -92,6 +92,39 @@ func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) (Inv
 	return i, err
 }
 
+const createInvitePhase = `-- name: CreateInvitePhase :one
+INSERT INTO invite_phases (id, invite_id, "order", strategy_kind, strategy_config)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, invite_id, "order", strategy_kind, strategy_config
+`
+
+type CreateInvitePhaseParams struct {
+	ID             uuid.UUID       `json:"id"`
+	InviteID       uuid.UUID       `json:"invite_id"`
+	Order          int32           `json:"order"`
+	StrategyKind   string          `json:"strategy_kind"`
+	StrategyConfig json.RawMessage `json:"strategy_config"`
+}
+
+func (q *Queries) CreateInvitePhase(ctx context.Context, arg CreateInvitePhaseParams) (InvitePhase, error) {
+	row := q.db.QueryRowContext(ctx, createInvitePhase,
+		arg.ID,
+		arg.InviteID,
+		arg.Order,
+		arg.StrategyKind,
+		arg.StrategyConfig,
+	)
+	var i InvitePhase
+	err := row.Scan(
+		&i.ID,
+		&i.InviteID,
+		&i.Order,
+		&i.StrategyKind,
+		&i.StrategyConfig,
+	)
+	return i, err
+}
+
 const createInvitee = `-- name: CreateInvitee :exec
 INSERT INTO invitees (id, invite_id, contact_id, state, created_at)
 VALUES ($1, $2, $3, $4, $5)
@@ -170,6 +203,20 @@ DELETE FROM invites WHERE id = $1
 
 func (q *Queries) DeleteInvite(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, deleteInvite, id)
+	return err
+}
+
+const deleteInvitePhase = `-- name: DeleteInvitePhase :exec
+DELETE FROM invite_phases WHERE id = $1 AND invite_id = $2
+`
+
+type DeleteInvitePhaseParams struct {
+	ID       uuid.UUID `json:"id"`
+	InviteID uuid.UUID `json:"invite_id"`
+}
+
+func (q *Queries) DeleteInvitePhase(ctx context.Context, arg DeleteInvitePhaseParams) error {
+	_, err := q.db.ExecContext(ctx, deleteInvitePhase, arg.ID, arg.InviteID)
 	return err
 }
 
@@ -263,6 +310,26 @@ func (q *Queries) GetActivePhasesToProcess(ctx context.Context, nextCheckAt sql.
 	return items, nil
 }
 
+const getFirstInvitePhase = `-- name: GetFirstInvitePhase :one
+SELECT id, invite_id, "order", strategy_kind, strategy_config FROM invite_phases 
+WHERE invite_id = $1 
+ORDER BY "order" ASC 
+LIMIT 1
+`
+
+func (q *Queries) GetFirstInvitePhase(ctx context.Context, inviteID uuid.UUID) (InvitePhase, error) {
+	row := q.db.QueryRowContext(ctx, getFirstInvitePhase, inviteID)
+	var i InvitePhase
+	err := row.Scan(
+		&i.ID,
+		&i.InviteID,
+		&i.Order,
+		&i.StrategyKind,
+		&i.StrategyConfig,
+	)
+	return i, err
+}
+
 const getGroup = `-- name: GetGroup :one
 SELECT id, name, description FROM groups WHERE id = $1
 `
@@ -290,6 +357,23 @@ func (q *Queries) GetInvite(ctx context.Context, id uuid.UUID) (Invite, error) {
 		&i.Duration,
 		&i.CreatedAt,
 		&i.Status,
+	)
+	return i, err
+}
+
+const getInvitePhase = `-- name: GetInvitePhase :one
+SELECT id, invite_id, "order", strategy_kind, strategy_config FROM invite_phases WHERE id = $1
+`
+
+func (q *Queries) GetInvitePhase(ctx context.Context, id uuid.UUID) (InvitePhase, error) {
+	row := q.db.QueryRowContext(ctx, getInvitePhase, id)
+	var i InvitePhase
+	err := row.Scan(
+		&i.ID,
+		&i.InviteID,
+		&i.Order,
+		&i.StrategyKind,
+		&i.StrategyConfig,
 	)
 	return i, err
 }
@@ -365,6 +449,39 @@ func (q *Queries) ListGroups(ctx context.Context) ([]Group, error) {
 	for rows.Next() {
 		var i Group
 		if err := rows.Scan(&i.ID, &i.Name, &i.Description); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInvitePhases = `-- name: ListInvitePhases :many
+SELECT id, invite_id, "order", strategy_kind, strategy_config FROM invite_phases WHERE invite_id = $1 ORDER BY "order" ASC
+`
+
+func (q *Queries) ListInvitePhases(ctx context.Context, inviteID uuid.UUID) ([]InvitePhase, error) {
+	rows, err := q.db.QueryContext(ctx, listInvitePhases, inviteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []InvitePhase
+	for rows.Next() {
+		var i InvitePhase
+		if err := rows.Scan(
+			&i.ID,
+			&i.InviteID,
+			&i.Order,
+			&i.StrategyKind,
+			&i.StrategyConfig,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

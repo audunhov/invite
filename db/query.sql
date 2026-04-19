@@ -78,6 +78,26 @@ VALUES ($1, $2, $3);
 -- name: RemoveGroupMember :exec
 DELETE FROM group_members WHERE group_id = $1 AND contact_id = $2;
 
+-- name: ListInvitePhases :many
+SELECT * FROM invite_phases WHERE invite_id = $1 ORDER BY "order" ASC;
+
+-- name: CreateInvitePhase :one
+INSERT INTO invite_phases (id, invite_id, "order", strategy_kind, strategy_config)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: DeleteInvitePhase :exec
+DELETE FROM invite_phases WHERE id = $1 AND invite_id = $2;
+
+-- name: GetFirstInvitePhase :one
+SELECT * FROM invite_phases 
+WHERE invite_id = $1 
+ORDER BY "order" ASC 
+LIMIT 1;
+
+-- name: GetInvitePhase :one
+SELECT * FROM invite_phases WHERE id = $1;
+
 -- name: GetActivePhasesToProcess :many
 SELECT 
     p.id AS phase_id,

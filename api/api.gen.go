@@ -48,6 +48,42 @@ func (e InviteStatus) Valid() bool {
 	}
 }
 
+// Defines values for InvitePhaseStrategyKind.
+const (
+	InvitePhaseStrategyKindLadder InvitePhaseStrategyKind = "ladder"
+	InvitePhaseStrategyKindSprint InvitePhaseStrategyKind = "sprint"
+)
+
+// Valid indicates whether the value is a known member of the InvitePhaseStrategyKind enum.
+func (e InvitePhaseStrategyKind) Valid() bool {
+	switch e {
+	case InvitePhaseStrategyKindLadder:
+		return true
+	case InvitePhaseStrategyKindSprint:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NewInvitePhaseStrategyKind.
+const (
+	NewInvitePhaseStrategyKindLadder NewInvitePhaseStrategyKind = "ladder"
+	NewInvitePhaseStrategyKindSprint NewInvitePhaseStrategyKind = "sprint"
+)
+
+// Valid indicates whether the value is a known member of the NewInvitePhaseStrategyKind enum.
+func (e NewInvitePhaseStrategyKind) Valid() bool {
+	switch e {
+	case NewInvitePhaseStrategyKindLadder:
+		return true
+	case NewInvitePhaseStrategyKindSprint:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateInviteStatus.
 const (
 	UpdateInviteStatusActive    UpdateInviteStatus = "active"
@@ -101,6 +137,20 @@ type Invite struct {
 // InviteStatus defines model for Invite.Status.
 type InviteStatus string
 
+// InvitePhase defines model for InvitePhase.
+type InvitePhase struct {
+	Id       openapi_types.UUID `json:"id"`
+	InviteId openapi_types.UUID `json:"invite_id"`
+	Order    int                `json:"order"`
+
+	// StrategyConfig JSON configuration specific to the strategy
+	StrategyConfig map[string]interface{}  `json:"strategy_config"`
+	StrategyKind   InvitePhaseStrategyKind `json:"strategy_kind"`
+}
+
+// InvitePhaseStrategyKind defines model for InvitePhase.StrategyKind.
+type InvitePhaseStrategyKind string
+
 // NewGroup defines model for NewGroup.
 type NewGroup struct {
 	Description *string `json:"description,omitempty"`
@@ -115,6 +165,16 @@ type NewInvite struct {
 	Title       string     `json:"title"`
 	To          *time.Time `json:"to,omitempty"`
 }
+
+// NewInvitePhase defines model for NewInvitePhase.
+type NewInvitePhase struct {
+	Order          int                        `json:"order"`
+	StrategyConfig map[string]interface{}     `json:"strategy_config"`
+	StrategyKind   NewInvitePhaseStrategyKind `json:"strategy_kind"`
+}
+
+// NewInvitePhaseStrategyKind defines model for NewInvitePhase.StrategyKind.
+type NewInvitePhaseStrategyKind string
 
 // NewPerson defines model for NewPerson.
 type NewPerson struct {
@@ -169,6 +229,9 @@ type CreateInviteJSONRequestBody = NewInvite
 // UpdateInviteJSONRequestBody defines body for UpdateInvite for application/json ContentType.
 type UpdateInviteJSONRequestBody = UpdateInvite
 
+// CreateInvitePhaseJSONRequestBody defines body for CreateInvitePhase for application/json ContentType.
+type CreateInvitePhaseJSONRequestBody = NewInvitePhase
+
 // CreatePersonJSONRequestBody defines body for CreatePerson for application/json ContentType.
 type CreatePersonJSONRequestBody = NewPerson
 
@@ -216,6 +279,18 @@ type ServerInterface interface {
 	// Update an invite
 	// (PATCH /invites/{id})
 	UpdateInvite(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// List phases for an invite
+	// (GET /invites/{id}/phases)
+	ListInvitePhases(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// Add a phase to an invite
+	// (POST /invites/{id}/phases)
+	CreateInvitePhase(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// Delete a phase from an invite
+	// (DELETE /invites/{id}/phases/{phase_id})
+	DeleteInvitePhase(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, phaseId openapi_types.UUID)
+	// Start the invite process
+	// (POST /invites/{id}/start)
+	StartInvite(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// List all persons
 	// (GET /persons)
 	ListPersons(w http.ResponseWriter, r *http.Request)
@@ -532,6 +607,115 @@ func (siw *ServerInterfaceWrapper) UpdateInvite(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ListInvitePhases operation middleware
+func (siw *ServerInterfaceWrapper) ListInvitePhases(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInvitePhases(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateInvitePhase operation middleware
+func (siw *ServerInterfaceWrapper) CreateInvitePhase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateInvitePhase(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteInvitePhase operation middleware
+func (siw *ServerInterfaceWrapper) DeleteInvitePhase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "phase_id" -------------
+	var phaseId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "phase_id", r.PathValue("phase_id"), &phaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "phase_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteInvitePhase(w, r, id, phaseId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartInvite operation middleware
+func (siw *ServerInterfaceWrapper) StartInvite(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartInvite(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListPersons operation middleware
 func (siw *ServerInterfaceWrapper) ListPersons(w http.ResponseWriter, r *http.Request) {
 
@@ -768,6 +952,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/invites/{id}", wrapper.DeleteInvite)
 	m.HandleFunc("GET "+options.BaseURL+"/invites/{id}", wrapper.GetInvite)
 	m.HandleFunc("PATCH "+options.BaseURL+"/invites/{id}", wrapper.UpdateInvite)
+	m.HandleFunc("GET "+options.BaseURL+"/invites/{id}/phases", wrapper.ListInvitePhases)
+	m.HandleFunc("POST "+options.BaseURL+"/invites/{id}/phases", wrapper.CreateInvitePhase)
+	m.HandleFunc("DELETE "+options.BaseURL+"/invites/{id}/phases/{phase_id}", wrapper.DeleteInvitePhase)
+	m.HandleFunc("POST "+options.BaseURL+"/invites/{id}/start", wrapper.StartInvite)
 	m.HandleFunc("GET "+options.BaseURL+"/persons", wrapper.ListPersons)
 	m.HandleFunc("POST "+options.BaseURL+"/persons", wrapper.CreatePerson)
 	m.HandleFunc("DELETE "+options.BaseURL+"/persons/{id}", wrapper.DeletePerson)
@@ -1060,6 +1248,98 @@ func (response UpdateInvite404Response) VisitUpdateInviteResponse(w http.Respons
 	return nil
 }
 
+type ListInvitePhasesRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type ListInvitePhasesResponseObject interface {
+	VisitListInvitePhasesResponse(w http.ResponseWriter) error
+}
+
+type ListInvitePhases200JSONResponse []InvitePhase
+
+func (response ListInvitePhases200JSONResponse) VisitListInvitePhasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateInvitePhaseRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *CreateInvitePhaseJSONRequestBody
+}
+
+type CreateInvitePhaseResponseObject interface {
+	VisitCreateInvitePhaseResponse(w http.ResponseWriter) error
+}
+
+type CreateInvitePhase201JSONResponse InvitePhase
+
+func (response CreateInvitePhase201JSONResponse) VisitCreateInvitePhaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteInvitePhaseRequestObject struct {
+	Id      openapi_types.UUID `json:"id"`
+	PhaseId openapi_types.UUID `json:"phase_id"`
+}
+
+type DeleteInvitePhaseResponseObject interface {
+	VisitDeleteInvitePhaseResponse(w http.ResponseWriter) error
+}
+
+type DeleteInvitePhase204Response struct {
+}
+
+func (response DeleteInvitePhase204Response) VisitDeleteInvitePhaseResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteInvitePhase404Response struct {
+}
+
+func (response DeleteInvitePhase404Response) VisitDeleteInvitePhaseResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type StartInviteRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type StartInviteResponseObject interface {
+	VisitStartInviteResponse(w http.ResponseWriter) error
+}
+
+type StartInvite200Response struct {
+}
+
+func (response StartInvite200Response) VisitStartInviteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
+	return nil
+}
+
+type StartInvite400Response struct {
+}
+
+func (response StartInvite400Response) VisitStartInviteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type StartInvite404Response struct {
+}
+
+func (response StartInvite404Response) VisitStartInviteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
 type ListPersonsRequestObject struct {
 }
 
@@ -1209,6 +1489,18 @@ type StrictServerInterface interface {
 	// Update an invite
 	// (PATCH /invites/{id})
 	UpdateInvite(ctx context.Context, request UpdateInviteRequestObject) (UpdateInviteResponseObject, error)
+	// List phases for an invite
+	// (GET /invites/{id}/phases)
+	ListInvitePhases(ctx context.Context, request ListInvitePhasesRequestObject) (ListInvitePhasesResponseObject, error)
+	// Add a phase to an invite
+	// (POST /invites/{id}/phases)
+	CreateInvitePhase(ctx context.Context, request CreateInvitePhaseRequestObject) (CreateInvitePhaseResponseObject, error)
+	// Delete a phase from an invite
+	// (DELETE /invites/{id}/phases/{phase_id})
+	DeleteInvitePhase(ctx context.Context, request DeleteInvitePhaseRequestObject) (DeleteInvitePhaseResponseObject, error)
+	// Start the invite process
+	// (POST /invites/{id}/start)
+	StartInvite(ctx context.Context, request StartInviteRequestObject) (StartInviteResponseObject, error)
 	// List all persons
 	// (GET /persons)
 	ListPersons(ctx context.Context, request ListPersonsRequestObject) (ListPersonsResponseObject, error)
@@ -1621,6 +1913,118 @@ func (sh *strictHandler) UpdateInvite(w http.ResponseWriter, r *http.Request, id
 	}
 }
 
+// ListInvitePhases operation middleware
+func (sh *strictHandler) ListInvitePhases(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request ListInvitePhasesRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListInvitePhases(ctx, request.(ListInvitePhasesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListInvitePhases")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListInvitePhasesResponseObject); ok {
+		if err := validResponse.VisitListInvitePhasesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateInvitePhase operation middleware
+func (sh *strictHandler) CreateInvitePhase(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request CreateInvitePhaseRequestObject
+
+	request.Id = id
+
+	var body CreateInvitePhaseJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateInvitePhase(ctx, request.(CreateInvitePhaseRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateInvitePhase")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateInvitePhaseResponseObject); ok {
+		if err := validResponse.VisitCreateInvitePhaseResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteInvitePhase operation middleware
+func (sh *strictHandler) DeleteInvitePhase(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, phaseId openapi_types.UUID) {
+	var request DeleteInvitePhaseRequestObject
+
+	request.Id = id
+	request.PhaseId = phaseId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteInvitePhase(ctx, request.(DeleteInvitePhaseRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteInvitePhase")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteInvitePhaseResponseObject); ok {
+		if err := validResponse.VisitDeleteInvitePhaseResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartInvite operation middleware
+func (sh *strictHandler) StartInvite(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request StartInviteRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartInvite(ctx, request.(StartInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartInviteResponseObject); ok {
+		if err := validResponse.VisitStartInviteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListPersons operation middleware
 func (sh *strictHandler) ListPersons(w http.ResponseWriter, r *http.Request) {
 	var request ListPersonsRequestObject
@@ -1764,24 +2168,28 @@ func (sh *strictHandler) UpdatePerson(w http.ResponseWriter, r *http.Request, id
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/9xYS2/bOBD+KwR3j9rY3fbkm3cDBAG2QVBgT0URMOI4ZmGRLDlKYBj67wUfetmSIyW2",
-	"kvZmi4+Z+eab+Uba0VRlWkmQaOliR226hoz5n0vOr4zK9WfI7sF8gR85WHQL2igNBgX4bRqMVfJOcPdn",
-	"pUzGkC5ongtOE4pbDXRBLRohH2hRJNTAj1wY4HTxtXH0W7VV3X+HFGmRUG/80B4HmxqhUSjp/u5ZSOgg",
-	"RxIqWQYd5/c89Gf91i4Pr+WjQDh0MTXAEPgdw5YrnCH8hSKDLn+eC4vnhrnFO3mIAr2Mi0RIIplUFlIl",
-	"ua3tCInwAMZdtDIqG+7WQDQtMsy9YyDzLORWcreYUJaieHSXO6ZtAMHdkDKZwmYDzdTX16HADXTCgGqo",
-	"712ZDPdGDJJmnqoQuvJ8A08vJOMwlvUS7Aae+jg2ki+v5cEZMtJKRk/0t75DHEYPGROblt3w5MWFXh7v",
-	"TcUJPDl9Z3rW6/+1y8fJydtj551w9X02ox7MzsrwPZvukZAr73WMKmoYWd5e04Q+grFBUT5czC/m7nKl",
-	"QTIt6IJ+vJhffKQJ1QzX3sXZg+OV//kAXupcAD6T15wu6H/C4lXY4rhrtZI2BPf3fO51UkkE6U8yrTci",
-	"9Wdn3yMgYRZxvwRC5g/+aWBFF/SPWT21zOLIMgssr6NmxrBtCLqtlkuyERaJWpEYgNti8yxjZhvdJmyz",
-	"qVYTqpXtiO9fLx/BbChOsPiP4ttRsR0LqRKeol3+aHIoDjD9cDK7DaNt6ELIfA+x8JQwIuEpoOY3RH7M",
-	"doIXoQ24gjvE8dI/L3HUzLAMEIyli687KpxZR7myzS1C62uDkTQCe24G/XYA3KeOiQpCcygS+qlr/UYh",
-	"Walc7kMRzhFWwpB0l8YV4BvGOz8/UZY1AKPwuwIswSP3W3J96cuPYbo+BLEpblPhePoab0YxqMwnyF7w",
-	"aTz7w7ma/XtNYJb5V8kBivE5bvwFymOQNkWVHyVO4e3Yunc6XEMD0j2piqC6I4220y1Z7Xf6X7hquj9O",
-	"DKqfDj4vOT/Cdm+IKENCFonsYf+Sc8JiOgiqZ8tgtqs+gBzVxy+QqUeYOG9J56X1F5uzK3CIuj8rsUWs",
-	"he5NSLiizol7jWhnRfjp93hDuo57pugT8Q1qVJ8oY+iZYqvl42NstHy2ObaMbNpBtml19CQrysM1UQbO",
-	"shWYv8cwKyso+sfZtwx5PgFflk0Qxo+05emBQ+3EaJ5rqh1T9FMk8bVzrWz1hDigHRWP27jnnQ+ZfeJR",
-	"LR8Xj2j5bOJRRjateDStjhYPXR6uiTJQPCowf5MvIbqiZZ92vGXE8wnosmxg8IKvIeHwQOWYGMtzKceY",
-	"ip8iha/+IlL1g6L4GQAA///qdPfHdB8AAA==",
+	"H4sIAAAAAAAC/9xa3W/bNhD/VwhuDxug2e7aJ795KxBkWLOgxZ6KwmDEs81OIlmSSmAY/t8HfujLkmwp",
+	"ieUkT41FHu/ud9+H7nAsUik4cKPxfId1vIGUuD8XlF4pkclPkN6B+gw/MtDGHkglJCjDwF2ToLTgS0bt",
+	"j5VQKTF4jrOMURxhs5WA51gbxfga7/cRVvAjYwoonn+tkH4rroq77xAbvI+wY97kR0HHiknDBLc/DzhE",
+	"uJcgEeYkhRb6AwkdrbvaJuE1v2cGmiLGCogBuiSmJgolBn4zLIU2eU6pRTNF7OGSN1HAH8MhYhxxwoWG",
+	"WHCqSz6MG1iDsg+tlEj7i9UTTW2IyZxgwLPU25ZTexhhEht2bx+3npaAAftCTHgMSQJV05fPGWYSaIXB",
+	"iL6yt1nSvxswiKp2KlTotvPthugWY/dEiLk3lj1vC0VBVQCo2E8bRQyst8tY8BVbN53hry//3CB/mLuF",
+	"lhCzFYuREchsAOVv4BZli/f/Y5xWLZoQaoWKsJaKcdNiuDbIS71zrQ5ZNFVqs8ENPDwyIfSL9M4gv4GH",
+	"rjgfGLNPjcUzREUtII5q3+H9wxz1jM72RN+6daWoqR+khCU1cP2XR1eUnLzT355BkucvgSel/ldap3v2",
+	"CO3g80IC8mVWvQ7MzurhBzz3ruCtnNRBq1BE0eL2Gkf4HpT21erdZDaZuZIngRPJ8By/n8wm73GEJTEb",
+	"J+J0bf3K/bkG11NZBZwlryme47+ZNlf+ivVdLQXXXrnfZzPXkAlugDtKImXCYkc7/R4A8U2vK+YGUkf4",
+	"s4IVnuOfpmV7PA298dR7eak1UYpsvdL1SrxACdMGiRUKCtgrOktTorZBbESSpDiNsBS6Rb8/XZ/i2frg",
+	"BG3+EHQ7SLdjKhXVdV8Pf6My2DcwffdsfCtM69B5lekBYv4rIojDg0fNXQj+Md0xuvdpwAZcE8eP7nuO",
+	"oySKpGBAaTz/usPMsrUul6e5uU99dTCiimKnhp1vDeA+tLTu4JPDPsIf2s5vhEErkfFDKDwdIjkMUXto",
+	"XIG5oL6z8zvKogRgEH5XYHLw0N0WXX904UdMvGmCWC1uY+H4/DFe1aJXmI9gPS/TcO/3dKX3HySBaep2",
+	"Fj0qxqdw8RWER6/aFKr8oOLk1zAaMe6GwxLSg1IVQLUklbTTXrLqy6NXHDXtW7Be8dPizwtKj3i7Y4SE",
+	"Qt6KiHd4/4JSRII57Eh/Kgymu2LTdrQ+foZU3MPIdotaHy1Xg2evwF7rbquEFLFhstMg/onSJnaMqFvF",
+	"r0GOJ6TrcGeMPBEmqEF5Iteho4stjo+3sYHz2frYXLNxG9kq18GdLMuJS0fp2csWYL6NZpYXUHS3s5dU",
+	"eTaCvyyqIAxvaXPqnk3tyGieq6sdEvRjGPGpfS3vzAlTuSG6VyG59RffSmdbXUMPa289Di1Vy5+glVD1",
+	"1HO6fHkxXm/UHKz1L1IsK6z7VEzf9DqTuZ73ZIhMd+7f5YBCOppZO5reIO8r2Dp5O/g+94gltCHK/5+B",
+	"1pD6Yo8vXtDrqoc9tZMcKNJZHIPWqyxJth6ubpqYcDsh3JXUv8BkPYkQSRQQui0+C4W4COnn104jhFe7",
+	"hg4HnpvYQ8WXSlhRvRnCUH+0TtyGOy98MdE1cBTHxzN24Hy2RJprNm4OrXIdPHDInLh0lJ4DRwHmG9me",
+	"y8Itu+aNS2o8G8FdFhUMHrFB98Q9p42RsTzXtDEk4scw4ZO36EU+2O//DwAA//9FyTlZESgAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
