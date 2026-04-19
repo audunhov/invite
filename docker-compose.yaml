@@ -8,3 +8,13 @@ services:
       POSTGRES_DB: invitedoc
     ports:
       - "5432:5432"
+
+  app:
+    build: .
+    volumes:
+      - .:/app
+    environment:
+      - DB_URL=postgres://user:password@db:5432/invitedoc?sslmode=disable
+    depends_on:
+      - db
+    command: air

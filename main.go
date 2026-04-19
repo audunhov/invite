@@ -326,5 +326,8 @@ func (ls *SprintStrategy) HandleEvent(ctx context.Context, invite Invite, phase 
 }
 
 func main() {
-
+	fmt.Println("Invite application starting...")
+	// In a real scenario, we would initialize the DB and start the orchestrator here.
+	// For now, we'll just keep the main process alive.
+	select {}
 }

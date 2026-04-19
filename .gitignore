@@ -1,0 +1,10 @@
+# Binaries
+main
+tmp/
+
+# Logs
+build-errors.log
+
+# DB
+# (If we want to keep generated files in git, don't ignore db/*.go)
+# db/*.go
