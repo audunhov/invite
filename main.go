@@ -15,6 +15,8 @@ import (
 
 	"invite/api"
 	"invite/db"
+
+	middleware "github.com/oapi-codegen/nethttp-middleware"
 )
 
 type Invite struct {
@@ -354,10 +356,19 @@ func main() {
 	// Register the generated handlers to the mux
 	api.HandlerFromMux(strictHandler, mux)
 
+	// Add request validation middleware
+	swagger, err := api.GetSwagger()
+	if err != nil {
+		fmt.Printf("Error loading swagger spec: %v\n", err)
+	}
+
+	var handler http.Handler = mux
+	handler = middleware.OapiRequestValidator(swagger)(handler)
+
 	// Start HTTP server in a separate goroutine
 	go func() {
 		fmt.Println("API server listening on :8080")
-		if err := http.ListenAndServe(":8080", mux); err != nil {
+		if err := http.ListenAndServe(":8080", handler); err != nil {
 			fmt.Printf("HTTP server error: %v\n", err)
 		}
 	}()
