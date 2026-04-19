@@ -73,6 +73,70 @@ func (app *App) InvitePerson(ctx context.Context, i Invite, p Person) (*Invitee,
 	}, nil
 }
 
+func (app *App) StartInviteProcess(ctx context.Context, inviteID uuid.UUID) error {
+	// 1. Get Invite
+	i, err := app.Queries.GetInvite(ctx, inviteID)
+	if err != nil {
+		return fmt.Errorf("failed to get invite: %w", err)
+	}
+
+	if i.Status != "pending" {
+		return fmt.Errorf("invite is already %s", i.Status)
+	}
+
+	// 2. Get First Phase
+	p, err := app.Queries.GetFirstInvitePhase(ctx, inviteID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("invite has no phases")
+		}
+		return fmt.Errorf("failed to get first phase: %w", err)
+	}
+
+	// 3. Map DB models to internal models
+	inviteModel := Invite{
+		ID:          i.ID,
+		Title:       i.Title,
+		Description: i.Description.String,
+		From:        i.From,
+		To:          i.To.Time,
+		Duration:    time.Duration(i.Duration.Int64),
+		CreatedAt:   i.CreatedAt,
+		Status:      i.Status,
+	}
+
+	phaseModel := Phase{
+		ID:             p.ID,
+		InviteID:       p.InviteID,
+		Order:          int(p.Order),
+		StrategyKind:   p.StrategyKind,
+		StrategyConfig: p.StrategyConfig,
+	}
+
+	// 4. Load Strategy
+	strategy, err := LoadStrategy(app, phaseModel)
+	if err != nil {
+		return fmt.Errorf("failed to load strategy: %w", err)
+	}
+
+	// 5. Update Invite Status to Active
+	_, err = app.Queries.UpdateInvite(ctx, db.UpdateInviteParams{
+		ID:     inviteID,
+		Status: sql.NullString{String: "active", Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to mark invite active: %w", err)
+	}
+
+	// 6. Execute Strategy
+	if err := strategy.Execute(ctx, inviteModel, phaseModel); err != nil {
+		slog.Error("Failed to execute initial strategy", slog.Any("error", err))
+		return fmt.Errorf("strategy execution failed: %w", err)
+	}
+
+	return nil
+}
+
 type Person = db.Person
 
 type Group struct {
@@ -404,7 +468,10 @@ func main() {
 	}
 
 	// 4. Initialize API server
-	server := &api.Server{Queries: app.Queries}
+	server := &api.Server{
+		Queries:         app.Queries,
+		StartInviteFunc: app.StartInviteProcess,
+	}
 	strictHandler := api.NewStrictHandler(server, nil)
 	mux := http.NewServeMux()
 	api.HandlerFromMux(strictHandler, mux)

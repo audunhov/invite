@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,7 +14,8 @@ import (
 )
 
 type Server struct {
-	Queries *db.Queries
+	Queries         *db.Queries
+	StartInviteFunc func(ctx context.Context, inviteID uuid.UUID) error
 }
 
 var _ StrictServerInterface = (*Server)(nil)
@@ -398,4 +401,81 @@ func (s *Server) DeleteInvite(ctx context.Context, request DeleteInviteRequestOb
 		return nil, err
 	}
 	return DeleteInvite204Response{}, nil
+}
+
+// Phase Handlers
+func (s *Server) ListInvitePhases(ctx context.Context, request ListInvitePhasesRequestObject) (ListInvitePhasesResponseObject, error) {
+	phases, err := s.Queries.ListInvitePhases(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	var res []InvitePhase
+	for _, p := range phases {
+		var cfg map[string]interface{}
+		json.Unmarshal(p.StrategyConfig, &cfg)
+
+		res = append(res, InvitePhase{
+			Id:             p.ID,
+			InviteId:       p.InviteID,
+			Order:          int(p.Order),
+			StrategyKind:   InvitePhaseStrategyKind(p.StrategyKind),
+			StrategyConfig: cfg,
+		})
+	}
+
+	return ListInvitePhases200JSONResponse(res), nil
+}
+
+func (s *Server) CreateInvitePhase(ctx context.Context, request CreateInvitePhaseRequestObject) (CreateInvitePhaseResponseObject, error) {
+	cfgBytes, err := json.Marshal(request.Body.StrategyConfig)
+	if err != nil {
+		return nil, fmt.Errorf("invalid strategy config: %w", err)
+	}
+
+	p, err := s.Queries.CreateInvitePhase(ctx, db.CreateInvitePhaseParams{
+		ID:             uuid.New(),
+		InviteID:       request.Id,
+		Order:          int32(request.Body.Order),
+		StrategyKind:   string(request.Body.StrategyKind),
+		StrategyConfig: cfgBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var cfgMap map[string]interface{}
+	json.Unmarshal(p.StrategyConfig, &cfgMap)
+
+	return CreateInvitePhase201JSONResponse(InvitePhase{
+		Id:             p.ID,
+		InviteId:       p.InviteID,
+		Order:          int(p.Order),
+		StrategyKind:   InvitePhaseStrategyKind(p.StrategyKind),
+		StrategyConfig: cfgMap,
+	}), nil
+}
+
+func (s *Server) DeleteInvitePhase(ctx context.Context, request DeleteInvitePhaseRequestObject) (DeleteInvitePhaseResponseObject, error) {
+	err := s.Queries.DeleteInvitePhase(ctx, db.DeleteInvitePhaseParams{
+		ID:       request.PhaseId,
+		InviteID: request.Id,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return DeleteInvitePhase204Response{}, nil
+}
+
+func (s *Server) StartInvite(ctx context.Context, request StartInviteRequestObject) (StartInviteResponseObject, error) {
+	if s.StartInviteFunc == nil {
+		return nil, errors.New("StartInviteFunc not configured")
+	}
+
+	err := s.StartInviteFunc(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	return StartInvite200Response{}, nil
 }
