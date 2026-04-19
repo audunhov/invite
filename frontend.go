@@ -19,7 +19,7 @@ func serveFrontend(mux *http.ServeMux) {
 
 	fileServer := http.FileServer(http.FS(distFS))
 
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
 		// Don't serve frontend for API, Swagger, or OpenAPI spec
