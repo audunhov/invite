@@ -229,6 +229,48 @@ func (q *Queries) DeletePerson(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const getActivePhaseForInvite = `-- name: GetActivePhaseForInvite :one
+SELECT 
+    p.id AS phase_id,
+    p.invite_id,
+    p."order",
+    p.strategy_kind,
+    p.strategy_config,
+    s.status AS phase_status,
+    s.next_check_at,
+    s.data AS phase_data
+FROM invite_phase_state s
+JOIN invite_phases p ON s.phase_id = p.id
+WHERE p.invite_id = $1 AND s.status = 'active'
+`
+
+type GetActivePhaseForInviteRow struct {
+	PhaseID        uuid.UUID       `json:"phase_id"`
+	InviteID       uuid.UUID       `json:"invite_id"`
+	Order          int32           `json:"order"`
+	StrategyKind   string          `json:"strategy_kind"`
+	StrategyConfig json.RawMessage `json:"strategy_config"`
+	PhaseStatus    string          `json:"phase_status"`
+	NextCheckAt    sql.NullTime    `json:"next_check_at"`
+	PhaseData      json.RawMessage `json:"phase_data"`
+}
+
+func (q *Queries) GetActivePhaseForInvite(ctx context.Context, inviteID uuid.UUID) (GetActivePhaseForInviteRow, error) {
+	row := q.db.QueryRowContext(ctx, getActivePhaseForInvite, inviteID)
+	var i GetActivePhaseForInviteRow
+	err := row.Scan(
+		&i.PhaseID,
+		&i.InviteID,
+		&i.Order,
+		&i.StrategyKind,
+		&i.StrategyConfig,
+		&i.PhaseStatus,
+		&i.NextCheckAt,
+		&i.PhaseData,
+	)
+	return i, err
+}
+
 const getActivePhasesToProcess = `-- name: GetActivePhasesToProcess :many
 SELECT 
     p.id AS phase_id,
@@ -393,6 +435,49 @@ func (q *Queries) GetInvitee(ctx context.Context, id uuid.UUID) (Invitee, error)
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const getPendingInvitees = `-- name: GetPendingInvitees :many
+SELECT p.id, p.email, p.name, i.created_at AS invited_at
+FROM invitees i
+JOIN persons p ON i.contact_id = p.id
+WHERE i.invite_id = $1 AND i.state = 'pending'
+ORDER BY i.created_at ASC
+`
+
+type GetPendingInviteesRow struct {
+	ID        uuid.UUID `json:"id"`
+	Email     string    `json:"email"`
+	Name      string    `json:"name"`
+	InvitedAt time.Time `json:"invited_at"`
+}
+
+func (q *Queries) GetPendingInvitees(ctx context.Context, inviteID uuid.UUID) ([]GetPendingInviteesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPendingInvitees, inviteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPendingInviteesRow
+	for rows.Next() {
+		var i GetPendingInviteesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.InvitedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getPerson = `-- name: GetPerson :one

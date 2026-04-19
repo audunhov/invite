@@ -151,6 +151,22 @@ type InvitePhase struct {
 // InvitePhaseStrategyKind defines model for InvitePhase.StrategyKind.
 type InvitePhaseStrategyKind string
 
+// InviteStatusReport defines model for InviteStatusReport.
+type InviteStatusReport struct {
+	ActivePhase *struct {
+		Id          *openapi_types.UUID `json:"id,omitempty"`
+		NextCheckAt *time.Time          `json:"next_check_at,omitempty"`
+		Order       *int                `json:"order,omitempty"`
+
+		// ProgressMessage Human-readable progress from the strategy
+		ProgressMessage *string `json:"progress_message,omitempty"`
+		StrategyKind    *string `json:"strategy_kind,omitempty"`
+	} `json:"active_phase,omitempty"`
+	InviteId        openapi_types.UUID `json:"invite_id"`
+	OverallStatus   string             `json:"overall_status"`
+	PendingInvitees *[]PendingInvitee  `json:"pending_invitees,omitempty"`
+}
+
 // NewGroup defines model for NewGroup.
 type NewGroup struct {
 	Description *string `json:"description,omitempty"`
@@ -180,6 +196,14 @@ type NewInvitePhaseStrategyKind string
 type NewPerson struct {
 	Email openapi_types.Email `json:"email"`
 	Name  string              `json:"name"`
+}
+
+// PendingInvitee defines model for PendingInvitee.
+type PendingInvitee struct {
+	Email     openapi_types.Email `json:"email"`
+	Id        openapi_types.UUID  `json:"id"`
+	InvitedAt time.Time           `json:"invited_at"`
+	Name      string              `json:"name"`
 }
 
 // Person defines model for Person.
@@ -291,6 +315,9 @@ type ServerInterface interface {
 	// Start the invite process
 	// (POST /invites/{id}/start)
 	StartInvite(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// Get current progress and pending invitees
+	// (GET /invites/{id}/status)
+	GetInviteStatus(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// List all persons
 	// (GET /persons)
 	ListPersons(w http.ResponseWriter, r *http.Request)
@@ -716,6 +743,31 @@ func (siw *ServerInterfaceWrapper) StartInvite(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetInviteStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetInviteStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetInviteStatus(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListPersons operation middleware
 func (siw *ServerInterfaceWrapper) ListPersons(w http.ResponseWriter, r *http.Request) {
 
@@ -956,6 +1008,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/invites/{id}/phases", wrapper.CreateInvitePhase)
 	m.HandleFunc("DELETE "+options.BaseURL+"/invites/{id}/phases/{phase_id}", wrapper.DeleteInvitePhase)
 	m.HandleFunc("POST "+options.BaseURL+"/invites/{id}/start", wrapper.StartInvite)
+	m.HandleFunc("GET "+options.BaseURL+"/invites/{id}/status", wrapper.GetInviteStatus)
 	m.HandleFunc("GET "+options.BaseURL+"/persons", wrapper.ListPersons)
 	m.HandleFunc("POST "+options.BaseURL+"/persons", wrapper.CreatePerson)
 	m.HandleFunc("DELETE "+options.BaseURL+"/persons/{id}", wrapper.DeletePerson)
@@ -1340,6 +1393,31 @@ func (response StartInvite404Response) VisitStartInviteResponse(w http.ResponseW
 	return nil
 }
 
+type GetInviteStatusRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type GetInviteStatusResponseObject interface {
+	VisitGetInviteStatusResponse(w http.ResponseWriter) error
+}
+
+type GetInviteStatus200JSONResponse InviteStatusReport
+
+func (response GetInviteStatus200JSONResponse) VisitGetInviteStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetInviteStatus404Response struct {
+}
+
+func (response GetInviteStatus404Response) VisitGetInviteStatusResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
 type ListPersonsRequestObject struct {
 }
 
@@ -1501,6 +1579,9 @@ type StrictServerInterface interface {
 	// Start the invite process
 	// (POST /invites/{id}/start)
 	StartInvite(ctx context.Context, request StartInviteRequestObject) (StartInviteResponseObject, error)
+	// Get current progress and pending invitees
+	// (GET /invites/{id}/status)
+	GetInviteStatus(ctx context.Context, request GetInviteStatusRequestObject) (GetInviteStatusResponseObject, error)
 	// List all persons
 	// (GET /persons)
 	ListPersons(ctx context.Context, request ListPersonsRequestObject) (ListPersonsResponseObject, error)
@@ -2025,6 +2106,32 @@ func (sh *strictHandler) StartInvite(w http.ResponseWriter, r *http.Request, id 
 	}
 }
 
+// GetInviteStatus operation middleware
+func (sh *strictHandler) GetInviteStatus(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request GetInviteStatusRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetInviteStatus(ctx, request.(GetInviteStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetInviteStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetInviteStatusResponseObject); ok {
+		if err := validResponse.VisitGetInviteStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListPersons operation middleware
 func (sh *strictHandler) ListPersons(w http.ResponseWriter, r *http.Request) {
 	var request ListPersonsRequestObject
@@ -2168,28 +2275,31 @@ func (sh *strictHandler) UpdatePerson(w http.ResponseWriter, r *http.Request, id
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
