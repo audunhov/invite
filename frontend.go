@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed frontend/dist/*
+//go:embed all:frontend/dist
 var frontendFS embed.FS
 
 func serveFrontend(mux *http.ServeMux) {
