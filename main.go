@@ -550,12 +550,24 @@ func main() {
 
 	validator := middleware.OapiRequestValidator(swagger)(mux)
 	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip validation for Swagger UI and OpenAPI spec
-		if r.URL.Path == "/openapi.json" || strings.HasPrefix(r.URL.Path, "/swagger/") {
-			mux.ServeHTTP(w, r)
+		path := r.URL.Path
+
+		// Only validate if it's an API route
+		isAPI := false
+		for _, prefix := range []string{"/persons", "/invites", "/groups"} {
+			if path == prefix || strings.HasPrefix(path, prefix+"/") {
+				isAPI = true
+				break
+			}
+		}
+
+		if isAPI {
+			validator.ServeHTTP(w, r)
 			return
 		}
-		validator.ServeHTTP(w, r)
+
+		// Fallback to mux for frontend, swagger, etc.
+		mux.ServeHTTP(w, r)
 	})
 
 	srv := &http.Server{
