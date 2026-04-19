@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 const createInvitee = `-- name: CreateInvitee :exec
@@ -167,6 +168,38 @@ func (q *Queries) GetPerson(ctx context.Context, id uuid.UUID) (Person, error) {
 	var i Person
 	err := row.Scan(&i.ID, &i.Email, &i.Name)
 	return i, err
+}
+
+const resolveRecipients = `-- name: ResolveRecipients :many
+SELECT p.id, p.email, p.name
+FROM persons p
+WHERE p.id = ANY($1::uuid[])
+OR p.id IN (
+    SELECT contact_id FROM group_members WHERE group_id = ANY($1::uuid[])
+)
+`
+
+func (q *Queries) ResolveRecipients(ctx context.Context, dollar_1 []uuid.UUID) ([]Person, error) {
+	rows, err := q.db.QueryContext(ctx, resolveRecipients, pq.Array(dollar_1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Person
+	for rows.Next() {
+		var i Person
+		if err := rows.Scan(&i.ID, &i.Email, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updatePhaseState = `-- name: UpdatePhaseState :exec

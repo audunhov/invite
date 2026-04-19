@@ -39,3 +39,11 @@ VALUES ($1, $2, $3, $4);
 
 -- name: GetInvitee :one
 SELECT * FROM invitees WHERE id = $1;
+
+-- name: ResolveRecipients :many
+SELECT p.id, p.email, p.name
+FROM persons p
+WHERE p.id = ANY($1::uuid[])
+OR p.id IN (
+    SELECT contact_id FROM group_members WHERE group_id = ANY($1::uuid[])
+);

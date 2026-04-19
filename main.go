@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"time"
+
+	_ "github.com/lib/pq"
 
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
@@ -59,11 +60,7 @@ func (app *App) InvitePerson(ctx context.Context, i Invite, p Person) (*Invitee,
 	}, nil
 }
 
-type Person struct {
-	ID    uuid.UUID // PRIMARY KEY
-	Email string    // UNIQUE NOT NULL, NOT BLANK. Not primary key as you might change email
-	Name  string    // Email displayed if not set
-}
+type Person = db.Person
 
 type Group struct {
 	ID          uuid.UUID
@@ -263,43 +260,64 @@ func (ls *SprintStrategy) Kind() StrategyKind {
 }
 
 func (ls *SprintStrategy) Execute(ctx context.Context, invite Invite, phase Phase) error {
-	g, gCtx := errgroup.WithContext(ctx)
+	persons, err := ls.app.Queries.ResolveRecipients(ctx, ls.Recipients)
+	if err != nil {
+		return err
+	}
 
-	jobs := make(chan uuid.UUID, len(ls.Recipients))
+	g, gCtx := errgroup.WithContext(ctx)
+	jobs := make(chan Person, len(persons))
 
 	numWorkers := 10
+	if len(persons) < numWorkers {
+		numWorkers = len(persons)
+	}
 
 	for range numWorkers {
 		g.Go(func() error {
-			// Re-use the SMTP connection here if possible
-			// smtpClient := connectToSMTP()
-			// defer smtpClient.Quit()
-
 			for {
 				select {
 				case <-gCtx.Done():
 					return gCtx.Err()
-				case id, ok := <-jobs:
+				case p, ok := <-jobs:
 					if !ok {
 						return nil
-					} // Channel closed
-
-					fmt.Printf("Worker sending to %s\n", id)
+					}
+					_, err := ls.app.InvitePerson(gCtx, invite, p)
+					if err != nil {
+						return err
+					}
 				}
-				time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 			}
 		})
 	}
 
-	for _, id := range ls.Recipients {
-		jobs <- id
+	for _, p := range persons {
+		jobs <- p
 	}
 	close(jobs)
 
-	return g.Wait()
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	return ls.app.Queries.CreatePhaseState(ctx, db.CreatePhaseStateParams{
+		PhaseID:     phase.ID,
+		Status:      "active",
+		NextCheckAt: sql.NullTime{Time: ls.Deadline, Valid: true},
+		Data:        json.RawMessage("{}"),
+	})
 }
 
 func (ls *SprintStrategy) Resume(ctx context.Context, invite Invite, phase Phase, state *PhaseState) error {
+	if time.Now().After(ls.Deadline) || time.Now().Equal(ls.Deadline) {
+		return ls.app.Queries.UpdatePhaseState(ctx, db.UpdatePhaseStateParams{
+			PhaseID:     phase.ID,
+			Status:      "completed",
+			NextCheckAt: sql.NullTime{Valid: false},
+			Data:        state.Data,
+		})
+	}
 	return nil
 }
 
