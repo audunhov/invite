@@ -520,14 +520,10 @@ func main() {
 	}
 	strictHandler := api.NewStrictHandler(server, nil)
 
+	// Create main router
 	mux := http.NewServeMux()
 
-	// Register the generated handlers to the mux
-	api.HandlerFromMux(strictHandler, mux)
-
-	// Serve the static frontend
-	serveFrontend(mux)
-
+	// 1. Metadata & Documentation (no validation)
 	mux.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, r *http.Request) {
 		swagger, err := api.GetSwagger()
 		if err != nil {
@@ -538,41 +534,28 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
 	})
-
 	mux.Handle("GET /swagger/", v5emb.New("Invite API", "/openapi.json", "/swagger/"))
 
-	// Add request validation middleware
+	// 2. API Routes (with validation)
 	swagger, err := api.GetSwagger()
 	if err != nil {
 		slog.Error("Error loading swagger spec", slog.Any("error", err))
 		os.Exit(1)
 	}
 
-	validator := middleware.OapiRequestValidator(swagger)(mux)
-	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
+	apiMux := http.NewServeMux()
+	api.HandlerFromMux(strictHandler, apiMux)
 
-		// Only validate if it's an API route
-		isAPI := false
-		for _, prefix := range []string{"/persons", "/invites", "/groups"} {
-			if path == prefix || strings.HasPrefix(path, prefix+"/") {
-				isAPI = true
-				break
-			}
-		}
+	// Mount API at /api/ with validation
+	validator := middleware.OapiRequestValidator(swagger)
+	mux.Handle("/api/", http.StripPrefix("/api", validator(apiMux)))
 
-		if isAPI {
-			validator.ServeHTTP(w, r)
-			return
-		}
-
-		// Fallback to mux for frontend, swagger, etc.
-		mux.ServeHTTP(w, r)
-	})
+	// 3. Frontend (catch-all)
+	serveFrontend(mux)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
-		Handler: handler,
+		Handler: mux,
 	}
 
 	// 5. Start Background Tasks (Orchestrator)
