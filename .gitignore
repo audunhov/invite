@@ -5,6 +5,10 @@ tmp/
 # Logs
 build-errors.log
 
+# Frontend
+frontend/dist/
+frontend/node_modules/
+
 # DB
 # (If we want to keep generated files in git, don't ignore db/*.go)
 # db/*.go

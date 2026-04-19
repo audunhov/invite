@@ -1,18 +1,20 @@
+# Build frontend
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build-only
+
+# Build Go app
 FROM golang:1.25-alpine
-
 WORKDIR /app
-
 # Install air for hot-reloading
 RUN go install github.com/air-verse/air@latest
-
-# Copy go.mod and go.sum first
 COPY go.mod go.sum ./
 RUN go mod download
-
-# Copy the rest of the application
 COPY . .
-
-# Build the app to ensure everything is in order
+# Copy built frontend from previous stage
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 RUN go build -o main .
-
 CMD ["air"]

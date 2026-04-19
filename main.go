@@ -519,8 +519,14 @@ func main() {
 		GetProgressFunc: app.GetPhaseProgress,
 	}
 	strictHandler := api.NewStrictHandler(server, nil)
+
 	mux := http.NewServeMux()
+
+	// Register the generated handlers to the mux
 	api.HandlerFromMux(strictHandler, mux)
+
+	// Serve the static frontend
+	serveFrontend(mux)
 
 	mux.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, r *http.Request) {
 		swagger, err := api.GetSwagger()
@@ -532,6 +538,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
 	})
+
 	mux.Handle("GET /swagger/", v5emb.New("Invite API", "/openapi.json", "/swagger/"))
 
 	// Add request validation middleware
