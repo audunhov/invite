@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"invite/db"
@@ -19,7 +20,7 @@ func (app *App) RunOrchestrator(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			if err := app.ProcessActivePhases(ctx); err != nil {
-				fmt.Printf("Error processing phases: %v\n", err)
+				slog.Error("Failed to process active phases", slog.Any("error", err))
 			}
 		}
 	}
@@ -67,13 +68,17 @@ func (app *App) ProcessActivePhases(ctx context.Context) error {
 		//    b. Load Strategy via LoadStrategy
 		strategy, err := LoadStrategy(app, phase)
 		if err != nil {
-			fmt.Printf("Error loading strategy for phase %s: %v\n", row.PhaseID, err)
+			slog.Error("Failed to load strategy",
+				slog.String("phase_id", row.PhaseID.String()),
+				slog.Any("error", err))
 			continue
 		}
 
 		//    c. Call strategy.Resume(...)
 		if err := strategy.Resume(ctx, invite, phase, state); err != nil {
-			fmt.Printf("Error resuming strategy for phase %s: %v\n", row.PhaseID, err)
+			slog.Error("Failed to resume strategy",
+				slog.String("phase_id", row.PhaseID.String()),
+				slog.Any("error", err))
 			continue
 		}
 
@@ -88,7 +93,9 @@ func (app *App) ProcessActivePhases(ctx context.Context) error {
 		}
 
 		if err := app.Queries.UpdatePhaseState(ctx, updateParams); err != nil {
-			fmt.Printf("Error updating phase state for phase %s: %v\n", row.PhaseID, err)
+			slog.Error("Failed to update phase state",
+				slog.String("phase_id", row.PhaseID.String()),
+				slog.Any("error", err))
 		}
 	}
 
