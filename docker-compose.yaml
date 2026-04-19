@@ -20,3 +20,16 @@ services:
     depends_on:
       - db
     command: air
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app/frontend
+    volumes:
+      - .:/app
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_PORT=5173
+    command: sh -c "npm install --legacy-peer-deps && npm run dev"
+    depends_on:
+      - app
