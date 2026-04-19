@@ -8,6 +8,7 @@ type UpdateInvite = components['schemas']['UpdateInvite']
 type InvitePhase = components['schemas']['InvitePhase']
 type NewInvitePhase = components['schemas']['NewInvitePhase']
 type InviteStatusReport = components['schemas']['InviteStatusReport']
+type InviteeStatus = components['schemas']['InviteeStatus']
 type Person = components['schemas']['Person']
 type Group = components['schemas']['Group']
 
@@ -168,8 +169,6 @@ async function addPhase() {
   try {
     let strategy_config: any = {}
     if (phaseForm.strategy_kind === 'ladder') {
-      // In main.go LadderStrategy expects "List" (array of Persons) and "Timeout" (nanoseconds)
-      // IMPORTANT: Use the order from selectedRecipientIds
       const selectedPersons = phaseForm.selectedRecipientIds
         .map(id => persons.value.find(p => p.id === id))
         .filter((p): p is Person => !!p)
@@ -179,10 +178,9 @@ async function addPhase() {
         Timeout: phaseForm.timeout_minutes * 60 * 1000000000
       }
     } else {
-      // SprintStrategy expects "Recipients" (array of UUIDs) and "Deadline"
       strategy_config = {
         Recipients: phaseForm.selectedRecipientIds,
-        Deadline: new Date(Date.now() + 3600000).toISOString() // Default 1h from now
+        Deadline: new Date(Date.now() + 3600000).toISOString()
       }
     }
 
@@ -249,12 +247,21 @@ async function openStatusModal(invite: Invite) {
   }
 }
 
-function copyLink(token: string) {
+function copyLink(token?: string) {
+  if (!token) return
   const url = `${window.location.origin}/respond/${token}`
   navigator.clipboard.writeText(url).then(() => {
     alert('Link copied to clipboard!')
   })
 }
+
+const statusCounts = computed(() => {
+  if (!statusReport.value?.invitees) return { pending: 0, accepted: 0, declined: 0 }
+  return statusReport.value.invitees.reduce((acc, i) => {
+    acc[i.status as keyof typeof acc] = (acc[i.status as keyof typeof acc] || 0) + 1
+    return acc
+  }, { pending: 0, accepted: 0, declined: 0 })
+})
 
 onMounted(fetchData)
 </script>
@@ -305,7 +312,7 @@ onMounted(fetchData)
                 </td>
                 <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">{{ new Date(invite.from).toLocaleString() }}</td>
                 <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0 space-x-3">
-                  <button v-if="invite.status === 'active'" @click="openStatusModal(invite)" class="text-green-600 hover:text-green-900 dark:text-green-400">Status</button>
+                  <button v-if="invite.status !== 'pending'" @click="openStatusModal(invite)" class="text-green-600 hover:text-green-900 dark:text-green-400">Status</button>
                   <button v-if="invite.status === 'pending'" @click="startInvite(invite)" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 font-bold">Start</button>
                   <button @click="openPhasesModal(invite)" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400">Phases</button>
                   <button @click="openEditInviteModal(invite)" class="text-gray-600 hover:text-gray-900 dark:text-gray-400">Edit</button>
@@ -359,7 +366,6 @@ onMounted(fetchData)
           <div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pt-5 pb-4 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:p-6">
             <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-4">Manage Phases: {{ selectedInviteForPhases?.title }}</h3>
             
-            <!-- Current Phases -->
             <div class="mb-8">
               <div v-if="loadingPhases" class="text-center py-4 text-gray-500">Loading...</div>
               <ul v-else-if="phases.length > 0" class="divide-y divide-gray-200 dark:divide-white/5 border dark:border-white/10 rounded-md">
@@ -375,7 +381,6 @@ onMounted(fetchData)
               <p v-else class="text-center py-4 text-gray-500 italic">No phases added yet.</p>
             </div>
 
-            <!-- Add Phase Form -->
             <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border dark:border-white/10">
               <h4 class="text-sm font-bold mb-4">Add New Phase</h4>
               <div class="grid grid-cols-2 gap-4 mb-4">
@@ -392,40 +397,30 @@ onMounted(fetchData)
                 </div>
               </div>
 
-              <!-- Recipient Selection -->
               <div class="mb-4">
                 <label class="block text-xs font-medium text-gray-500 uppercase mb-2">Available Recipients</label>
                 <div class="max-h-32 overflow-y-auto border dark:border-white/10 rounded p-2 bg-white dark:bg-gray-800">
-                  <!-- Persons always shown -->
                   <div v-for="p in persons" :key="p.id" class="flex items-center mb-1">
-                    <input type="checkbox" 
-                      :checked="phaseForm.selectedRecipientIds.includes(p.id)" 
-                      @change="toggleRecipient(p.id)" 
-                      class="mr-2" />
+                    <input type="checkbox" :checked="phaseForm.selectedRecipientIds.includes(p.id)" @change="toggleRecipient(p.id)" class="mr-2" />
                     <span class="text-sm">{{ p.name }} (Person)</span>
                   </div>
-                  <!-- Groups only shown for Sprint -->
                   <template v-if="phaseForm.strategy_kind === 'sprint'">
                     <div v-for="g in groups" :key="g.id" class="flex items-center mb-1">
-                      <input type="checkbox" 
-                        :checked="phaseForm.selectedRecipientIds.includes(g.id)" 
-                        @change="toggleRecipient(g.id)" 
-                        class="mr-2" />
+                      <input type="checkbox" :checked="phaseForm.selectedRecipientIds.includes(g.id)" @change="toggleRecipient(g.id)" class="mr-2" />
                       <span class="text-sm">{{ g.name }} (Group)</span>
                     </div>
                   </template>
                 </div>
               </div>
 
-              <!-- Ordered Recipients (Ladder only) -->
               <div v-if="phaseForm.strategy_kind === 'ladder' && phaseForm.selectedRecipientIds.length > 0" class="mb-4">
-                <label class="block text-xs font-medium text-gray-500 uppercase mb-2">Recipient Priority (Drag to reorder - soon, use buttons for now)</label>
+                <label class="block text-xs font-medium text-gray-500 uppercase mb-2">Recipient Priority</label>
                 <ul class="border dark:border-white/10 rounded-md divide-y divide-gray-100 dark:divide-white/5 bg-white dark:bg-gray-800">
                   <li v-for="(id, idx) in phaseForm.selectedRecipientIds" :key="id" class="p-2 flex justify-between items-center text-sm">
                     <span><span class="font-bold mr-2">{{ idx + 1 }}.</span> {{ getRecipientName(id) }}</span>
                     <div class="space-x-2">
-                      <button @click="moveRecipient(idx, -1)" :disabled="idx === 0" class="text-gray-400 hover:text-indigo-600 disabled:opacity-30">↑</button>
-                      <button @click="moveRecipient(idx, 1)" :disabled="idx === phaseForm.selectedRecipientIds.length - 1" class="text-gray-400 hover:text-indigo-600 disabled:opacity-30">↓</button>
+                      <button @click="moveRecipient(idx, -1)" :disabled="idx === 0" class="text-gray-400">↑</button>
+                      <button @click="moveRecipient(idx, 1)" :disabled="idx === phaseForm.selectedRecipientIds.length - 1" class="text-gray-400">↓</button>
                     </div>
                   </li>
                 </ul>
@@ -449,16 +444,26 @@ onMounted(fetchData)
       <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
       <div class="fixed inset-0 z-10 overflow-y-auto">
         <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-          <div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pt-5 pb-4 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+          <div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pt-5 pb-4 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:p-6">
             <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-4">Invite Status</h3>
             
             <div v-if="loadingStatus" class="text-center py-4">Loading...</div>
             <div v-else-if="statusReport">
-              <div class="mb-6">
-                <label class="text-xs font-bold uppercase text-gray-500">Overall Status</label>
-                <p class="text-lg font-bold">{{ statusReport.overall_status }}</p>
+              <div class="grid grid-cols-3 gap-4 mb-8 text-center">
+                <div class="bg-gray-50 dark:bg-gray-900/30 p-4 rounded-lg border dark:border-white/10">
+                  <p class="text-2xl font-bold">{{ statusCounts.accepted }}</p>
+                  <p class="text-xs uppercase text-green-600 font-bold">Accepted</p>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-900/30 p-4 rounded-lg border dark:border-white/10">
+                  <p class="text-2xl font-bold">{{ statusCounts.pending }}</p>
+                  <p class="text-xs uppercase text-indigo-600 font-bold">Pending</p>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-900/30 p-4 rounded-lg border dark:border-white/10">
+                  <p class="text-2xl font-bold">{{ statusCounts.declined }}</p>
+                  <p class="text-xs uppercase text-red-600 font-bold">Declined</p>
+                </div>
               </div>
-              
+
               <div v-if="statusReport.active_phase" class="mb-6 bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded border border-indigo-100 dark:border-indigo-800">
                 <label class="text-xs font-bold uppercase text-indigo-600 dark:text-indigo-400">Current Phase (#{{ statusReport.active_phase.order }})</label>
                 <p class="font-medium">{{ statusReport.active_phase.progress_message }}</p>
@@ -466,28 +471,43 @@ onMounted(fetchData)
                 <p v-if="statusReport.active_phase.next_check_at" class="text-xs text-gray-500">Next check: {{ new Date(statusReport.active_phase.next_check_at).toLocaleTimeString() }}</p>
               </div>
 
-              <div>
-                <label class="text-xs font-bold uppercase text-gray-500">Waiting For ({{ statusReport.pending_invitees?.length || 0 }})</label>
-                <ul class="mt-2 divide-y divide-gray-100 dark:divide-white/5">
-                  <li v-for="p in statusReport.pending_invitees" :key="p.id" class="py-3">
-                    <div class="flex justify-between items-start">
-                      <div>
-                        <p class="text-sm font-medium text-gray-900 dark:text-white">{{ p.name }}</p>
-                        <p class="text-xs text-gray-500">{{ p.email }}</p>
-                      </div>
-                      <button 
-                        @click="copyLink(p.magic_token)"
-                        class="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                      >
-                        Copy Link
-                      </button>
-                    </div>
-                  </li>
-                </ul>
+              <div class="mt-8">
+                <h4 class="text-sm font-bold uppercase text-gray-500 mb-4">Recipient Details</h4>
+                <div class="max-h-64 overflow-y-auto">
+                  <table class="min-w-full divide-y divide-gray-200 dark:divide-white/5">
+                    <thead>
+                      <tr class="text-left text-xs text-gray-400 uppercase">
+                        <th class="pb-2">Name</th>
+                        <th class="pb-2 text-center">Status</th>
+                        <th class="pb-2 text-right">Link</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-white/5">
+                      <tr v-for="p in statusReport.invitees" :key="p.id" class="py-3">
+                        <td class="py-3">
+                          <p class="text-sm font-medium">{{ p.name }}</p>
+                          <p class="text-xs text-gray-500">{{ p.email }}</p>
+                        </td>
+                        <td class="py-3 text-center">
+                          <span :class="{
+                            'text-green-500 font-bold': p.status === 'accepted',
+                            'text-red-500 font-bold': p.status === 'declined',
+                            'text-gray-400': p.status === 'pending'
+                          }" class="text-xs uppercase px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700/50">
+                            {{ p.status }}
+                          </span>
+                        </td>
+                        <td class="py-3 text-right">
+                          <button v-if="p.status === 'pending'" @click="copyLink(p.magic_token)" class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded">Copy Link</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
 
-            <div class="mt-6">
+            <div class="mt-6 flex justify-between gap-4">
               <button @click="isStatusModalOpen = false" class="w-full bg-gray-100 dark:bg-gray-700 py-2 rounded-md">Close</button>
             </div>
           </div>

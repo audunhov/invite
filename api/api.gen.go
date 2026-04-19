@@ -84,6 +84,30 @@ func (e InviteResponseAction) Valid() bool {
 	}
 }
 
+// Defines values for InviteeStatusStatus.
+const (
+	InviteeStatusStatusAccepted InviteeStatusStatus = "accepted"
+	InviteeStatusStatusDeclined InviteeStatusStatus = "declined"
+	InviteeStatusStatusExpired  InviteeStatusStatus = "expired"
+	InviteeStatusStatusPending  InviteeStatusStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the InviteeStatusStatus enum.
+func (e InviteeStatusStatus) Valid() bool {
+	switch e {
+	case InviteeStatusStatusAccepted:
+		return true
+	case InviteeStatusStatusDeclined:
+		return true
+	case InviteeStatusStatusExpired:
+		return true
+	case InviteeStatusStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NewInvitePhaseStrategyKind.
 const (
 	NewInvitePhaseStrategyKindLadder NewInvitePhaseStrategyKind = "ladder"
@@ -128,22 +152,22 @@ func (e PublicInviteDetailsCurrentState) Valid() bool {
 
 // Defines values for UpdateInviteStatus.
 const (
-	Active    UpdateInviteStatus = "active"
-	Cancelled UpdateInviteStatus = "cancelled"
-	Completed UpdateInviteStatus = "completed"
-	Pending   UpdateInviteStatus = "pending"
+	UpdateInviteStatusActive    UpdateInviteStatus = "active"
+	UpdateInviteStatusCancelled UpdateInviteStatus = "cancelled"
+	UpdateInviteStatusCompleted UpdateInviteStatus = "completed"
+	UpdateInviteStatusPending   UpdateInviteStatus = "pending"
 )
 
 // Valid indicates whether the value is a known member of the UpdateInviteStatus enum.
 func (e UpdateInviteStatus) Valid() bool {
 	switch e {
-	case Active:
+	case UpdateInviteStatusActive:
 		return true
-	case Cancelled:
+	case UpdateInviteStatusCancelled:
 		return true
-	case Completed:
+	case UpdateInviteStatusCompleted:
 		return true
-	case Pending:
+	case UpdateInviteStatusPending:
 		return true
 	default:
 		return false
@@ -212,10 +236,23 @@ type InviteStatusReport struct {
 		ProgressMessage *string `json:"progress_message,omitempty"`
 		StrategyKind    *string `json:"strategy_kind,omitempty"`
 	} `json:"active_phase,omitempty"`
-	InviteId        openapi_types.UUID `json:"invite_id"`
-	OverallStatus   string             `json:"overall_status"`
-	PendingInvitees *[]PendingInvitee  `json:"pending_invitees,omitempty"`
+	InviteId      openapi_types.UUID `json:"invite_id"`
+	Invitees      *[]InviteeStatus   `json:"invitees,omitempty"`
+	OverallStatus string             `json:"overall_status"`
 }
+
+// InviteeStatus defines model for InviteeStatus.
+type InviteeStatus struct {
+	Email      openapi_types.Email `json:"email"`
+	Id         openapi_types.UUID  `json:"id"`
+	InvitedAt  time.Time           `json:"invited_at"`
+	MagicToken *openapi_types.UUID `json:"magic_token,omitempty"`
+	Name       string              `json:"name"`
+	Status     InviteeStatusStatus `json:"status"`
+}
+
+// InviteeStatusStatus defines model for InviteeStatus.Status.
+type InviteeStatusStatus string
 
 // NewGroup defines model for NewGroup.
 type NewGroup struct {
@@ -246,15 +283,6 @@ type NewInvitePhaseStrategyKind string
 type NewPerson struct {
 	Email openapi_types.Email `json:"email"`
 	Name  string              `json:"name"`
-}
-
-// PendingInvitee defines model for PendingInvitee.
-type PendingInvitee struct {
-	Email      openapi_types.Email `json:"email"`
-	Id         openapi_types.UUID  `json:"id"`
-	InvitedAt  time.Time           `json:"invited_at"`
-	MagicToken openapi_types.UUID  `json:"magic_token"`
-	Name       string              `json:"name"`
 }
 
 // Person defines model for Person.
@@ -2515,35 +2543,35 @@ func (sh *strictHandler) RespondToInvite(w http.ResponseWriter, r *http.Request,
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"ZAxvrjf/BgAA//8DRPbJYTIAAA==",
+	"H4sIAAAAAAAC/9xaSW8bNxT+KwTbQwtMLKXJSTe1Rl0XjWs46SkIBHr4JDOZIRmSY0cw9N8LLrNpFs3Y",
+	"krycLA+39763fVzucSxSKThwo/HsHuv4BlLifs4pPVMikx8gvQZ1Bd8z0MY2SCUkKMPAdZOgtOALRu0/",
+	"S6FSYvAMZxmjOMJmLQHPsDaK8RXebCKs4HvGFFA8+1wZ+qXoKq6/QmzwJsJu8eZ6FHSsmDRMcPvv1goR",
+	"HiRIhDlJoWX8loRurOvaJuE5v2UGmiLGCogBuiCmJgolBt4YlkKbPLvUopkitnHBmyjg09CIGEeccKEh",
+	"Fpzqch3GDaxA2YmWSqTDxRqIpjbEZE4w4FnqbcupbYwwiQ27tZNbT0vAgJ0hJjyGJIGq6cvpDDMJtMJg",
+	"xFDZ2yzp5w0YRFU7FSp02/nyhugWYw9EiLk5FgN7C0VBVQCo2E8bRQys1otY8CVbNZ3h74//XiDfmLuF",
+	"lhCzJYuREcjcAMrnwC3KFvN/Y5xWLZoQaoWKsJaKcdNiuDbIS71zrbaXaKrUbYMr0FLwNjNYL/Ohk8tL",
+	"4hiktSyFOGEcdgsc5uhe/qPzkSuQQpl2EW5hIR/lJxx+mEV8A/G3Uemjx2GkEisFWi9S0JqsoOkxf2Up",
+	"4W8UEEquE0D5AGTDpMNfqqG/5S9NjBtojgsG3zugaCB1P35WsMQz/NOkrF+TULwm3ljBWrgUgChF1g6t",
+	"W1AkSRZl2trhyVUnro/tdpZ8/YYnQEpYUtPcf3l4+vXyjSs4KVmxeGHEN+CPKZi7cr+NQZfxQxTan/BD",
+	"OmSHZZAcHCdATdfepH0Bdw9kEMOoQScruIC7LmIwssg/tngfoIzWKmiv9h3lclxlO2B1ekwxuoC7S8dd",
+	"HxXcw/ys5v5twuxBkv1z5t1SZ9cJi72rnIIhLGnJlHGmFHDjci3sJ8PsZtojCfKoUnYIYlupTdv8tgZf",
+	"mxX+k3ahvefJjnWeSVp8npuVDswOmme21tw4f146qYNWgcug+eU5jvAtKO0p49uT6cnUUSkJnEiGZ/jd",
+	"yfTkHY6wJObGiThZWb9yP1fgmIlVwFnynOIZ/odpc+a7WJf2zN51/206deEvuAHuRhIpExa7sZOvARBP",
+	"9wazQu/lDTa42U4JeI4Spg0SSxQUsF10lqZErYPYiCRJ0RphKXSLfn+47aVf1scsaPO7oOtRuvWpVHCc",
+	"TT0rGJXBpoHp272tW1m0Dp1XmW4h5r8igjjcedRch+Afk3tGNz4N2IBr4njqvuc4SqJICgaUxrPP95jZ",
+	"Za3L5cVm5gtQHYyootiuM6ovDeDet5y4gE8Omwi/b2u/EAYtRca3ofDjEMlhiNpD4wzME+o7PbyjzEsA",
+	"RuF3BiYHD12v0fmpCz9i4psmiNXidiwc9x/jVS0GhfkRrOdlGu/9flzp/VtJYJK6o+YBFeND6PgCwmNQ",
+	"bQpVflRx8qfnGjHuzmhKSLdKVQDVDqmknfaSVT/zf8FR0355MSh+Wvx5TmmPt7uFkFDIWxHxDu+fU4pI",
+	"MAcyYmcYTO6LC5Le+ngFqbiFI9stap20vNE5eAX2WndbJaSIGyY7DeKnKG3izjtrVvGbq/6EdB76HCNP",
+	"hB3UqDyR69DBYovmfhobVj4Yj801Oy6Rra46msmyfHDpKAO5bAHm6yCzvICim84+pcrTI/jLvArCeEqb",
+	"jx5Iao+M5qFY7ZigP4YRH8treWdOmLhbwSGF5NJ3fC3MtnoZMI7eehxaqpZvQUuh6qlnd/nyYrzcqNm6",
+	"XHmSYllZekjF9KTXmcxx3p0hMrl3fxcjCunRzNpBeoO8L+DUydvB89weS2hDwgOH1pD6aJufvKDXVQ/n",
+	"1E5yoEhncQxaL7MkWXu4usfEhNsdwnU5+hc4WZ1EiCQKCF0Xn4VCXIT082unEcKsXZsOB57bsYeKL5Ww",
+	"orabIVxU9LOq8NDgVXCr2hOblixT2tlkGqnQ72GmsMwr3JGVj14IpyjcB6Hi5YmzTThw6a3hl6HPMz80",
+	"6toMFs391TSsfLAil2t23PpWXXX0ZlDmg0tHGbgZLMB8JTcbsnDLrqz1lBpPj+Au8woGD7jd8IMH7gSP",
+	"jOWhdoJjIv4YJnz0DUc1H3j56eTevbbb7C7ofwpVvHQdYln/iu/ZBkrLU5/uyk7zHh3If7K69pZ0VpvI",
+	"7RNz3boLm8ebfhIjeO2eYN9/TG09ln7otUc+AVIQC9V3BdJvlLl7o2Xpc3iiVdt82K6gbnOcM5XgGZ4Q",
+	"yfDmy+b/AAAA//8FxXb+oDIAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

@@ -478,36 +478,38 @@ func (q *Queries) GetInviteeByToken(ctx context.Context, magicToken uuid.UUID) (
 	return i, err
 }
 
-const getPendingInvitees = `-- name: GetPendingInvitees :many
-SELECT p.id, p.email, p.name, i.created_at AS invited_at, i.magic_token
+const getInviteesStatus = `-- name: GetInviteesStatus :many
+SELECT p.id, p.email, p.name, i.created_at AS invited_at, i.state AS status, i.magic_token
 FROM invitees i
 JOIN persons p ON i.contact_id = p.id
-WHERE i.invite_id = $1 AND i.state = 'pending'
+WHERE i.invite_id = $1
 ORDER BY i.created_at ASC
 `
 
-type GetPendingInviteesRow struct {
+type GetInviteesStatusRow struct {
 	ID         uuid.UUID `json:"id"`
 	Email      string    `json:"email"`
 	Name       string    `json:"name"`
 	InvitedAt  time.Time `json:"invited_at"`
+	Status     string    `json:"status"`
 	MagicToken uuid.UUID `json:"magic_token"`
 }
 
-func (q *Queries) GetPendingInvitees(ctx context.Context, inviteID uuid.UUID) ([]GetPendingInviteesRow, error) {
-	rows, err := q.db.QueryContext(ctx, getPendingInvitees, inviteID)
+func (q *Queries) GetInviteesStatus(ctx context.Context, inviteID uuid.UUID) ([]GetInviteesStatusRow, error) {
+	rows, err := q.db.QueryContext(ctx, getInviteesStatus, inviteID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetPendingInviteesRow
+	var items []GetInviteesStatusRow
 	for rows.Next() {
-		var i GetPendingInviteesRow
+		var i GetInviteesStatusRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Email,
 			&i.Name,
 			&i.InvitedAt,
+			&i.Status,
 			&i.MagicToken,
 		); err != nil {
 			return nil, err

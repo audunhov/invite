@@ -637,14 +637,14 @@ components:
             next_check_at:
               type: string
               format: date-time
-        pending_invitees:
+        invitees:
           type: array
           items:
-            $ref: '#/components/schemas/PendingInvitee'
+            $ref: '#/components/schemas/InviteeStatus'
 
-    PendingInvitee:
+    InviteeStatus:
       type: object
-      required: [id, email, name, invited_at, magic_token]
+      required: [id, email, name, invited_at, status]
       properties:
         id:
           type: string
@@ -657,6 +657,9 @@ components:
         invited_at:
           type: string
           format: date-time
+        status:
+          type: string
+          enum: [pending, accepted, declined, expired]
         magic_token:
           type: string
           format: uuid

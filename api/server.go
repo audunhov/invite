@@ -526,26 +526,24 @@ func (s *Server) GetInviteStatus(ctx context.Context, request GetInviteStatusReq
 		}
 	}
 
-	// 3. Get Pending Invitees
-	pendingRows, err := s.Queries.GetPendingInvitees(ctx, i.ID)
+	// 3. Get All Invitees Status
+	inviteeRows, err := s.Queries.GetInviteesStatus(ctx, i.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	var pending []PendingInvitee
-	for _, pr := range pendingRows {
-		pending = append(pending, PendingInvitee{
-			Id:         pr.ID,
-			Email:      types.Email(pr.Email),
-			Name:       pr.Name,
-			InvitedAt:  pr.InvitedAt,
-			MagicToken: pr.MagicToken,
+	resInvitees := []InviteeStatus{}
+	for _, ir := range inviteeRows {
+		resInvitees = append(resInvitees, InviteeStatus{
+			Id:         ir.ID,
+			Email:      types.Email(ir.Email),
+			Name:       ir.Name,
+			InvitedAt:  ir.InvitedAt,
+			Status:     InviteeStatusStatus(ir.Status),
+			MagicToken: &ir.MagicToken,
 		})
 	}
-
-	if len(pending) > 0 {
-		resp.PendingInvitees = &pending
-	}
+	resp.Invitees = &resInvitees
 
 	return GetInviteStatus200JSONResponse(resp), nil
 }

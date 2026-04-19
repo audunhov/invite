@@ -98,11 +98,11 @@ LIMIT 1;
 -- name: GetInvitePhase :one
 SELECT * FROM invite_phases WHERE id = $1;
 
--- name: GetPendingInvitees :many
-SELECT p.id, p.email, p.name, i.created_at AS invited_at, i.magic_token
+-- name: GetInviteesStatus :many
+SELECT p.id, p.email, p.name, i.created_at AS invited_at, i.state AS status, i.magic_token
 FROM invitees i
 JOIN persons p ON i.contact_id = p.id
-WHERE i.invite_id = $1 AND i.state = 'pending'
+WHERE i.invite_id = $1
 ORDER BY i.created_at ASC;
 
 -- name: GetActivePhaseForInvite :one
