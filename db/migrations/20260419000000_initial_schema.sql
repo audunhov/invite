@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE persons (
     id UUID PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
@@ -51,3 +52,12 @@ CREATE TABLE invite_phase_state (
     next_check_at TIMESTAMP WITH TIME ZONE,
     data JSONB NOT NULL DEFAULT '{}'
 );
+
+-- +goose Down
+DROP TABLE invite_phase_state;
+DROP TABLE invite_phases;
+DROP TABLE invitees;
+DROP TABLE invites;
+DROP TABLE group_members;
+DROP TABLE groups;
+DROP TABLE persons;

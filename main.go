@@ -359,6 +359,11 @@ func main() {
 		log.Fatalf("Failed to ping db: %v", err)
 	}
 
+	// Run migrations
+	if err := db.Migrate(ctx, dbConn); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
+
 	app := &App{
 		Queries: db.New(dbConn),
 		DB:      dbConn,
