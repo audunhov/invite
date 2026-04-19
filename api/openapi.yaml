@@ -183,6 +183,91 @@ paths:
         '404':
           description: Not found
 
+  /invites/{id}/phases:
+    get:
+      summary: List phases for an invite
+      operationId: ListInvitePhases
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: A list of phases
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvitePhase'
+    post:
+      summary: Add a phase to an invite
+      operationId: CreateInvitePhase
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewInvitePhase'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitePhase'
+  /invites/{id}/phases/{phase_id}:
+    delete:
+      summary: Delete a phase from an invite
+      operationId: DeleteInvitePhase
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: phase_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          description: Not found
+
+  /invites/{id}/start:
+    post:
+      summary: Start the invite process
+      operationId: StartInvite
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Invite started successfully
+        '400':
+          description: Invite cannot be started (e.g., already started or no phases)
+        '404':
+          description: Invite not found
+
   /groups:
     get:
       summary: List all groups
@@ -430,6 +515,37 @@ components:
         status:
           type: string
           enum: [pending, active, completed, cancelled]
+
+    InvitePhase:
+      type: object
+      required: [id, invite_id, order, strategy_kind, strategy_config]
+      properties:
+        id:
+          type: string
+          format: uuid
+        invite_id:
+          type: string
+          format: uuid
+        order:
+          type: integer
+        strategy_kind:
+          type: string
+          enum: [ladder, sprint]
+        strategy_config:
+          type: object
+          description: JSON configuration specific to the strategy
+
+    NewInvitePhase:
+      type: object
+      required: [order, strategy_kind, strategy_config]
+      properties:
+        order:
+          type: integer
+        strategy_kind:
+          type: string
+          enum: [ladder, sprint]
+        strategy_config:
+          type: object
 
     Group:
       type: object
