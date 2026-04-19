@@ -205,6 +205,7 @@ type Strategy interface {
 	Execute(ctx context.Context, invite Invite, phase Phase) error
 	Resume(ctx context.Context, invite Invite, phase Phase, state *PhaseState) error
 	HandleEvent(ctx context.Context, invite Invite, phase Phase, state *PhaseState, event Event) error
+	Progress(state *PhaseState) string
 }
 
 // Factory function to turn DB data into usable logic
@@ -242,6 +243,17 @@ type LadderStrategy struct {
 
 func (ls *LadderStrategy) Kind() StrategyKind {
 	return StrategyKindLadder
+}
+
+func (ls *LadderStrategy) Progress(state *PhaseState) string {
+	if state == nil || state.Data == nil {
+		return "Not started"
+	}
+	var data struct{ Index int }
+	if err := json.Unmarshal(state.Data, &data); err != nil {
+		return "Error parsing state"
+	}
+	return fmt.Sprintf("Waiting for person %d of %d", data.Index+1, len(ls.List))
 }
 
 func (ls *LadderStrategy) Execute(ctx context.Context, invite Invite, phase Phase) error {
@@ -334,6 +346,13 @@ type SprintStrategy struct {
 
 func (ls *SprintStrategy) Kind() StrategyKind {
 	return StrategyKindSprint
+}
+
+func (ls *SprintStrategy) Progress(state *PhaseState) string {
+	if state == nil {
+		return "Not started"
+	}
+	return "Invites sent, waiting for deadline"
 }
 
 func (ls *SprintStrategy) Execute(ctx context.Context, invite Invite, phase Phase) error {
