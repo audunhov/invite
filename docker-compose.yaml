@@ -13,6 +13,8 @@ services:
     build: .
     volumes:
       - .:/app
+    ports:
+      - "8080:8080"
     environment:
       - DB_URL=postgres://user:password@db:5432/invitedoc?sslmode=disable
     depends_on:
