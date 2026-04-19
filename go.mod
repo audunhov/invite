@@ -3,6 +3,7 @@ module invite
 go 1.25.9
 
 require (
+	github.com/caarlos0/env/v11 v11.4.0
 	github.com/getkin/kin-openapi v0.133.0
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.12.3

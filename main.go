@@ -4,8 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -14,6 +19,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"invite/api"
+	"invite/config"
 	"invite/db"
 
 	middleware "github.com/oapi-codegen/nethttp-middleware"
@@ -332,48 +338,85 @@ func (ls *SprintStrategy) HandleEvent(ctx context.Context, invite Invite, phase 
 func main() {
 	fmt.Println("Invite application starting...")
 
-	// Mock DB connection for now (replace with actual connection string from env later)
-	dbConn, err := sql.Open("postgres", "postgres://user:password@localhost:5432/invitedoc?sslmode=disable")
+	// 1. Load Configuration
+	cfg, err := config.Load()
 	if err != nil {
-		fmt.Printf("Failed to connect to db: %v\n", err)
+		log.Fatalf("Configuration error: %v", err)
+	}
+
+	// 2. Setup Graceful Shutdown Context
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// 3. Initialize Database
+	dbConn, err := sql.Open("postgres", cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("Failed to connect to db: %v", err)
 	}
 	defer dbConn.Close()
+
+	if err := dbConn.Ping(); err != nil {
+		log.Fatalf("Failed to ping db: %v", err)
+	}
 
 	app := &App{
 		Queries: db.New(dbConn),
 		DB:      dbConn,
 	}
 
-	// Initialize API server
+	// 4. Initialize API server
 	server := &api.Server{Queries: app.Queries}
-
-	// Create the strict handler
 	strictHandler := api.NewStrictHandler(server, nil)
-
-	// Create a standard http.ServeMux
 	mux := http.NewServeMux()
-
-	// Register the generated handlers to the mux
 	api.HandlerFromMux(strictHandler, mux)
 
 	// Add request validation middleware
 	swagger, err := api.GetSwagger()
 	if err != nil {
-		fmt.Printf("Error loading swagger spec: %v\n", err)
+		log.Fatalf("Error loading swagger spec: %v", err)
 	}
 
 	var handler http.Handler = mux
 	handler = middleware.OapiRequestValidator(swagger)(handler)
 
-	// Start HTTP server in a separate goroutine
-	go func() {
-		fmt.Println("API server listening on :8080")
-		if err := http.ListenAndServe(":8080", handler); err != nil {
-			fmt.Printf("HTTP server error: %v\n", err)
-		}
-	}()
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", cfg.Port),
+		Handler: handler,
+	}
 
-	// In a real scenario, we would start the orchestrator here.
-	// For now, we'll just keep the main process alive.
-	select {}
+	// 5. Start Background Tasks (Orchestrator)
+	g, gCtx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		fmt.Println("Starting Orchestrator...")
+		return app.RunOrchestrator(gCtx)
+	})
+
+	// 6. Start HTTP Server
+	g.Go(func() error {
+		fmt.Printf("API server listening on :%d\n", cfg.Port)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("HTTP server error: %w", err)
+		}
+		return nil
+	})
+
+	// 7. Wait for Shutdown Signal
+	<-ctx.Done()
+	fmt.Println("\nShutdown signal received, shutting down gracefully...")
+
+	// Create a timeout context for the HTTP server shutdown
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		fmt.Printf("HTTP server shutdown error: %v\n", err)
+	}
+
+	// Wait for background tasks (like orchestrator) to finish
+	if err := g.Wait(); err != nil {
+		fmt.Printf("Error during shutdown: %v\n", err)
+	}
+
+	fmt.Println("Application stopped gracefully.")
 }
