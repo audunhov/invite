@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import type { components } from '../api-types'
 
 type Invite = components['schemas']['Invite']
@@ -37,7 +37,7 @@ const phaseForm = reactive({
   order: 1,
   strategy_kind: 'ladder' as 'ladder' | 'sprint',
   timeout_minutes: 60,
-  selectedRecipients: [] as string[], // Person or Group IDs
+  selectedRecipientIds: [] as string[], // Keep internal order for Ladder
 })
 
 // Status Modal
@@ -61,6 +61,31 @@ async function fetchData() {
     error.value = err instanceof Error ? err.message : 'Unknown error'
   } finally {
     loading.value = false
+  }
+}
+
+// Helper to get name from ID
+function getRecipientName(id: string) {
+  const p = persons.value.find(p => p.id === id)
+  if (p) return p.name + ' (Person)'
+  const g = groups.value.find(g => g.id === id)
+  if (g) return g.name + ' (Group)'
+  return 'Unknown'
+}
+
+function moveRecipient(index: number, direction: number) {
+  const newIndex = index + direction
+  if (newIndex < 0 || newIndex >= phaseForm.selectedRecipientIds.length) return
+  const item = phaseForm.selectedRecipientIds.splice(index, 1)[0]
+  phaseForm.selectedRecipientIds.splice(newIndex, 0, item)
+}
+
+function toggleRecipient(id: string) {
+  const index = phaseForm.selectedRecipientIds.indexOf(id)
+  if (index > -1) {
+    phaseForm.selectedRecipientIds.splice(index, 1)
+  } else {
+    phaseForm.selectedRecipientIds.push(id)
   }
 }
 
@@ -144,7 +169,11 @@ async function addPhase() {
     let strategy_config: any = {}
     if (phaseForm.strategy_kind === 'ladder') {
       // In main.go LadderStrategy expects "List" (array of Persons) and "Timeout" (nanoseconds)
-      const selectedPersons = persons.value.filter(p => phaseForm.selectedRecipients.includes(p.id))
+      // IMPORTANT: Use the order from selectedRecipientIds
+      const selectedPersons = phaseForm.selectedRecipientIds
+        .map(id => persons.value.find(p => p.id === id))
+        .filter((p): p is Person => !!p)
+
       strategy_config = {
         List: selectedPersons,
         Timeout: phaseForm.timeout_minutes * 60 * 1000000000
@@ -152,7 +181,7 @@ async function addPhase() {
     } else {
       // SprintStrategy expects "Recipients" (array of UUIDs) and "Deadline"
       strategy_config = {
-        Recipients: phaseForm.selectedRecipients,
+        Recipients: phaseForm.selectedRecipientIds,
         Deadline: new Date(Date.now() + 3600000).toISOString() // Default 1h from now
       }
     }
@@ -170,7 +199,7 @@ async function addPhase() {
     })
     if (!response.ok) throw new Error('Failed to add phase')
     await fetchPhases(selectedInviteForPhases.value.id)
-    phaseForm.selectedRecipients = []
+    phaseForm.selectedRecipientIds = []
   } catch (err) {
     alert(err)
   } finally {
@@ -355,20 +384,47 @@ onMounted(fetchData)
                   <input v-model="phaseForm.timeout_minutes" type="number" class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-700 dark:text-white p-2 border" />
                 </div>
               </div>
+
+              <!-- Recipient Selection -->
               <div class="mb-4">
-                <label class="block text-xs font-medium text-gray-500 uppercase mb-2">Recipients (People or Groups)</label>
+                <label class="block text-xs font-medium text-gray-500 uppercase mb-2">Available Recipients</label>
                 <div class="max-h-32 overflow-y-auto border dark:border-white/10 rounded p-2 bg-white dark:bg-gray-800">
+                  <!-- Persons always shown -->
                   <div v-for="p in persons" :key="p.id" class="flex items-center mb-1">
-                    <input type="checkbox" :value="p.id" v-model="phaseForm.selectedRecipients" class="mr-2" />
+                    <input type="checkbox" 
+                      :checked="phaseForm.selectedRecipientIds.includes(p.id)" 
+                      @change="toggleRecipient(p.id)" 
+                      class="mr-2" />
                     <span class="text-sm">{{ p.name }} (Person)</span>
                   </div>
-                  <div v-for="g in groups" :key="g.id" class="flex items-center mb-1">
-                    <input type="checkbox" :value="g.id" v-model="phaseForm.selectedRecipients" class="mr-2" />
-                    <span class="text-sm">{{ g.name }} (Group)</span>
-                  </div>
+                  <!-- Groups only shown for Sprint -->
+                  <template v-if="phaseForm.strategy_kind === 'sprint'">
+                    <div v-for="g in groups" :key="g.id" class="flex items-center mb-1">
+                      <input type="checkbox" 
+                        :checked="phaseForm.selectedRecipientIds.includes(g.id)" 
+                        @change="toggleRecipient(g.id)" 
+                        class="mr-2" />
+                      <span class="text-sm">{{ g.name }} (Group)</span>
+                    </div>
+                  </template>
                 </div>
               </div>
-              <button @click="addPhase" :disabled="isAddingPhase || phaseForm.selectedRecipients.length === 0" class="w-full bg-indigo-600 text-white py-2 rounded-md hover:bg-indigo-700 disabled:opacity-50">
+
+              <!-- Ordered Recipients (Ladder only) -->
+              <div v-if="phaseForm.strategy_kind === 'ladder' && phaseForm.selectedRecipientIds.length > 0" class="mb-4">
+                <label class="block text-xs font-medium text-gray-500 uppercase mb-2">Recipient Priority (Drag to reorder - soon, use buttons for now)</label>
+                <ul class="border dark:border-white/10 rounded-md divide-y divide-gray-100 dark:divide-white/5 bg-white dark:bg-gray-800">
+                  <li v-for="(id, idx) in phaseForm.selectedRecipientIds" :key="id" class="p-2 flex justify-between items-center text-sm">
+                    <span><span class="font-bold mr-2">{{ idx + 1 }}.</span> {{ getRecipientName(id) }}</span>
+                    <div class="space-x-2">
+                      <button @click="moveRecipient(idx, -1)" :disabled="idx === 0" class="text-gray-400 hover:text-indigo-600 disabled:opacity-30">↑</button>
+                      <button @click="moveRecipient(idx, 1)" :disabled="idx === phaseForm.selectedRecipientIds.length - 1" class="text-gray-400 hover:text-indigo-600 disabled:opacity-30">↓</button>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              <button @click="addPhase" :disabled="isAddingPhase || phaseForm.selectedRecipientIds.length === 0" class="w-full bg-indigo-600 text-white py-2 rounded-md hover:bg-indigo-700 disabled:opacity-50">
                 Add Phase
               </button>
             </div>
