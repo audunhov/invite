@@ -8,6 +8,8 @@ import (
 type Config struct {
 	DatabaseURL string `env:"DB_URL,required"`
 	Port        int    `env:"PORT" envDefault:"8080"`
+	LogLevel    string `env:"LOG_LEVEL" envDefault:"info"`
+	LogFormat   string `env:"LOG_FORMAT" envDefault:"text"` // text or json
 }
 
 func Load() (*Config, error) {
