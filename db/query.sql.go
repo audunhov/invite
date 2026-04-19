@@ -155,6 +155,33 @@ func (q *Queries) CreatePhaseState(ctx context.Context, arg CreatePhaseStatePara
 	return err
 }
 
+const deleteGroup = `-- name: DeleteGroup :exec
+DELETE FROM groups WHERE id = $1
+`
+
+func (q *Queries) DeleteGroup(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteGroup, id)
+	return err
+}
+
+const deleteInvite = `-- name: DeleteInvite :exec
+DELETE FROM invites WHERE id = $1
+`
+
+func (q *Queries) DeleteInvite(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteInvite, id)
+	return err
+}
+
+const deletePerson = `-- name: DeletePerson :exec
+DELETE FROM persons WHERE id = $1
+`
+
+func (q *Queries) DeletePerson(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deletePerson, id)
+	return err
+}
+
 const getActivePhasesToProcess = `-- name: GetActivePhasesToProcess :many
 SELECT 
     p.id AS phase_id,
@@ -414,6 +441,20 @@ func (q *Queries) ListPersons(ctx context.Context) ([]Person, error) {
 	return items, nil
 }
 
+const removeGroupMember = `-- name: RemoveGroupMember :exec
+DELETE FROM group_members WHERE group_id = $1 AND contact_id = $2
+`
+
+type RemoveGroupMemberParams struct {
+	GroupID   uuid.UUID `json:"group_id"`
+	ContactID uuid.UUID `json:"contact_id"`
+}
+
+func (q *Queries) RemoveGroupMember(ctx context.Context, arg RemoveGroupMemberParams) error {
+	_, err := q.db.ExecContext(ctx, removeGroupMember, arg.GroupID, arg.ContactID)
+	return err
+}
+
 const resolveRecipients = `-- name: ResolveRecipients :many
 SELECT p.id, p.email, p.name
 FROM persons p
@@ -444,6 +485,97 @@ func (q *Queries) ResolveRecipients(ctx context.Context, dollar_1 []uuid.UUID) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateGroup = `-- name: UpdateGroup :one
+UPDATE groups
+SET 
+    name = COALESCE($1, name),
+    description = COALESCE($2, description)
+WHERE id = $3
+RETURNING id, name, description
+`
+
+type UpdateGroupParams struct {
+	Name        sql.NullString `json:"name"`
+	Description sql.NullString `json:"description"`
+	ID          uuid.UUID      `json:"id"`
+}
+
+func (q *Queries) UpdateGroup(ctx context.Context, arg UpdateGroupParams) (Group, error) {
+	row := q.db.QueryRowContext(ctx, updateGroup, arg.Name, arg.Description, arg.ID)
+	var i Group
+	err := row.Scan(&i.ID, &i.Name, &i.Description)
+	return i, err
+}
+
+const updateInvite = `-- name: UpdateInvite :one
+UPDATE invites
+SET 
+    title = COALESCE($1, title),
+    description = COALESCE($2, description),
+    "from" = COALESCE($3, "from"),
+    "to" = COALESCE($4, "to"),
+    duration = COALESCE($5, duration),
+    status = COALESCE($6, status)
+WHERE id = $7
+RETURNING id, title, description, "from", "to", duration, created_at, status
+`
+
+type UpdateInviteParams struct {
+	Title       sql.NullString `json:"title"`
+	Description sql.NullString `json:"description"`
+	From        sql.NullTime   `json:"from"`
+	To          sql.NullTime   `json:"to"`
+	Duration    sql.NullInt64  `json:"duration"`
+	Status      sql.NullString `json:"status"`
+	ID          uuid.UUID      `json:"id"`
+}
+
+func (q *Queries) UpdateInvite(ctx context.Context, arg UpdateInviteParams) (Invite, error) {
+	row := q.db.QueryRowContext(ctx, updateInvite,
+		arg.Title,
+		arg.Description,
+		arg.From,
+		arg.To,
+		arg.Duration,
+		arg.Status,
+		arg.ID,
+	)
+	var i Invite
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.From,
+		&i.To,
+		&i.Duration,
+		&i.CreatedAt,
+		&i.Status,
+	)
+	return i, err
+}
+
+const updatePerson = `-- name: UpdatePerson :one
+UPDATE persons
+SET 
+    email = COALESCE($1, email),
+    name = COALESCE($2, name)
+WHERE id = $3
+RETURNING id, email, name
+`
+
+type UpdatePersonParams struct {
+	Email sql.NullString `json:"email"`
+	Name  sql.NullString `json:"name"`
+	ID    uuid.UUID      `json:"id"`
+}
+
+func (q *Queries) UpdatePerson(ctx context.Context, arg UpdatePersonParams) (Person, error) {
+	row := q.db.QueryRowContext(ctx, updatePerson, arg.Email, arg.Name, arg.ID)
+	var i Person
+	err := row.Scan(&i.ID, &i.Email, &i.Name)
+	return i, err
 }
 
 const updatePhaseState = `-- name: UpdatePhaseState :exec

@@ -26,22 +26,46 @@ import (
 
 // Defines values for InviteStatus.
 const (
-	Active    InviteStatus = "active"
-	Cancelled InviteStatus = "cancelled"
-	Completed InviteStatus = "completed"
-	Pending   InviteStatus = "pending"
+	InviteStatusActive    InviteStatus = "active"
+	InviteStatusCancelled InviteStatus = "cancelled"
+	InviteStatusCompleted InviteStatus = "completed"
+	InviteStatusPending   InviteStatus = "pending"
 )
 
 // Valid indicates whether the value is a known member of the InviteStatus enum.
 func (e InviteStatus) Valid() bool {
 	switch e {
-	case Active:
+	case InviteStatusActive:
 		return true
-	case Cancelled:
+	case InviteStatusCancelled:
 		return true
-	case Completed:
+	case InviteStatusCompleted:
 		return true
-	case Pending:
+	case InviteStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateInviteStatus.
+const (
+	UpdateInviteStatusActive    UpdateInviteStatus = "active"
+	UpdateInviteStatusCancelled UpdateInviteStatus = "cancelled"
+	UpdateInviteStatusCompleted UpdateInviteStatus = "completed"
+	UpdateInviteStatusPending   UpdateInviteStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the UpdateInviteStatus enum.
+func (e UpdateInviteStatus) Valid() bool {
+	switch e {
+	case UpdateInviteStatusActive:
+		return true
+	case UpdateInviteStatusCancelled:
+		return true
+	case UpdateInviteStatusCompleted:
+		return true
+	case UpdateInviteStatusPending:
 		return true
 	default:
 		return false
@@ -105,8 +129,36 @@ type Person struct {
 	Name  string              `json:"name"`
 }
 
+// UpdateGroup defines model for UpdateGroup.
+type UpdateGroup struct {
+	Description *string `json:"description,omitempty"`
+	Name        *string `json:"name,omitempty"`
+}
+
+// UpdateInvite defines model for UpdateInvite.
+type UpdateInvite struct {
+	Description *string             `json:"description,omitempty"`
+	DurationNs  *int                `json:"duration_ns,omitempty"`
+	From        *time.Time          `json:"from,omitempty"`
+	Status      *UpdateInviteStatus `json:"status,omitempty"`
+	Title       *string             `json:"title,omitempty"`
+	To          *time.Time          `json:"to,omitempty"`
+}
+
+// UpdateInviteStatus defines model for UpdateInvite.Status.
+type UpdateInviteStatus string
+
+// UpdatePerson defines model for UpdatePerson.
+type UpdatePerson struct {
+	Email *openapi_types.Email `json:"email,omitempty"`
+	Name  *string              `json:"name,omitempty"`
+}
+
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = NewGroup
+
+// UpdateGroupJSONRequestBody defines body for UpdateGroup for application/json ContentType.
+type UpdateGroupJSONRequestBody = UpdateGroup
 
 // AddGroupMemberJSONRequestBody defines body for AddGroupMember for application/json ContentType.
 type AddGroupMemberJSONRequestBody = AddGroupMemberRequest
@@ -114,8 +166,14 @@ type AddGroupMemberJSONRequestBody = AddGroupMemberRequest
 // CreateInviteJSONRequestBody defines body for CreateInvite for application/json ContentType.
 type CreateInviteJSONRequestBody = NewInvite
 
+// UpdateInviteJSONRequestBody defines body for UpdateInvite for application/json ContentType.
+type UpdateInviteJSONRequestBody = UpdateInvite
+
 // CreatePersonJSONRequestBody defines body for CreatePerson for application/json ContentType.
 type CreatePersonJSONRequestBody = NewPerson
+
+// UpdatePersonJSONRequestBody defines body for UpdatePerson for application/json ContentType.
+type UpdatePersonJSONRequestBody = UpdatePerson
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -125,33 +183,54 @@ type ServerInterface interface {
 	// Create a new group
 	// (POST /groups)
 	CreateGroup(w http.ResponseWriter, r *http.Request)
+	// Delete a group
+	// (DELETE /groups/{id})
+	DeleteGroup(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// Get a group by ID
 	// (GET /groups/{id})
 	GetGroup(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// Update a group
+	// (PATCH /groups/{id})
+	UpdateGroup(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// List members of a group
 	// (GET /groups/{id}/members)
 	ListGroupMembers(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// Add a member to a group
 	// (POST /groups/{id}/members)
 	AddGroupMember(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// Remove a member from a group
+	// (DELETE /groups/{id}/members/{person_id})
+	RemoveGroupMember(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, personId openapi_types.UUID)
 	// List all invites
 	// (GET /invites)
 	ListInvites(w http.ResponseWriter, r *http.Request)
 	// Create a new invite
 	// (POST /invites)
 	CreateInvite(w http.ResponseWriter, r *http.Request)
+	// Delete an invite
+	// (DELETE /invites/{id})
+	DeleteInvite(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// Get an invite by ID
 	// (GET /invites/{id})
 	GetInvite(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// Update an invite
+	// (PATCH /invites/{id})
+	UpdateInvite(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// List all persons
 	// (GET /persons)
 	ListPersons(w http.ResponseWriter, r *http.Request)
 	// Create a new person
 	// (POST /persons)
 	CreatePerson(w http.ResponseWriter, r *http.Request)
+	// Delete a person
+	// (DELETE /persons/{id})
+	DeletePerson(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// Get a person by ID
 	// (GET /persons/{id})
 	GetPerson(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// Update a person
+	// (PATCH /persons/{id})
+	UpdatePerson(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -191,6 +270,31 @@ func (siw *ServerInterfaceWrapper) CreateGroup(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteGroup operation middleware
+func (siw *ServerInterfaceWrapper) DeleteGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteGroup(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetGroup operation middleware
 func (siw *ServerInterfaceWrapper) GetGroup(w http.ResponseWriter, r *http.Request) {
 
@@ -207,6 +311,31 @@ func (siw *ServerInterfaceWrapper) GetGroup(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetGroup(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateGroup operation middleware
+func (siw *ServerInterfaceWrapper) UpdateGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateGroup(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -266,6 +395,40 @@ func (siw *ServerInterfaceWrapper) AddGroupMember(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// RemoveGroupMember operation middleware
+func (siw *ServerInterfaceWrapper) RemoveGroupMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "person_id" -------------
+	var personId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "person_id", r.PathValue("person_id"), &personId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "person_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveGroupMember(w, r, id, personId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListInvites operation middleware
 func (siw *ServerInterfaceWrapper) ListInvites(w http.ResponseWriter, r *http.Request) {
 
@@ -294,6 +457,31 @@ func (siw *ServerInterfaceWrapper) CreateInvite(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteInvite operation middleware
+func (siw *ServerInterfaceWrapper) DeleteInvite(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteInvite(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetInvite operation middleware
 func (siw *ServerInterfaceWrapper) GetInvite(w http.ResponseWriter, r *http.Request) {
 
@@ -310,6 +498,31 @@ func (siw *ServerInterfaceWrapper) GetInvite(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetInvite(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateInvite operation middleware
+func (siw *ServerInterfaceWrapper) UpdateInvite(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateInvite(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -347,6 +560,31 @@ func (siw *ServerInterfaceWrapper) CreatePerson(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// DeletePerson operation middleware
+func (siw *ServerInterfaceWrapper) DeletePerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeletePerson(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetPerson operation middleware
 func (siw *ServerInterfaceWrapper) GetPerson(w http.ResponseWriter, r *http.Request) {
 
@@ -363,6 +601,31 @@ func (siw *ServerInterfaceWrapper) GetPerson(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetPerson(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePerson operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePerson(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -494,15 +757,22 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc("GET "+options.BaseURL+"/groups", wrapper.ListGroups)
 	m.HandleFunc("POST "+options.BaseURL+"/groups", wrapper.CreateGroup)
+	m.HandleFunc("DELETE "+options.BaseURL+"/groups/{id}", wrapper.DeleteGroup)
 	m.HandleFunc("GET "+options.BaseURL+"/groups/{id}", wrapper.GetGroup)
+	m.HandleFunc("PATCH "+options.BaseURL+"/groups/{id}", wrapper.UpdateGroup)
 	m.HandleFunc("GET "+options.BaseURL+"/groups/{id}/members", wrapper.ListGroupMembers)
 	m.HandleFunc("POST "+options.BaseURL+"/groups/{id}/members", wrapper.AddGroupMember)
+	m.HandleFunc("DELETE "+options.BaseURL+"/groups/{id}/members/{person_id}", wrapper.RemoveGroupMember)
 	m.HandleFunc("GET "+options.BaseURL+"/invites", wrapper.ListInvites)
 	m.HandleFunc("POST "+options.BaseURL+"/invites", wrapper.CreateInvite)
+	m.HandleFunc("DELETE "+options.BaseURL+"/invites/{id}", wrapper.DeleteInvite)
 	m.HandleFunc("GET "+options.BaseURL+"/invites/{id}", wrapper.GetInvite)
+	m.HandleFunc("PATCH "+options.BaseURL+"/invites/{id}", wrapper.UpdateInvite)
 	m.HandleFunc("GET "+options.BaseURL+"/persons", wrapper.ListPersons)
 	m.HandleFunc("POST "+options.BaseURL+"/persons", wrapper.CreatePerson)
+	m.HandleFunc("DELETE "+options.BaseURL+"/persons/{id}", wrapper.DeletePerson)
 	m.HandleFunc("GET "+options.BaseURL+"/persons/{id}", wrapper.GetPerson)
+	m.HandleFunc("PATCH "+options.BaseURL+"/persons/{id}", wrapper.UpdatePerson)
 
 	return m
 }
@@ -540,6 +810,30 @@ func (response CreateGroup201JSONResponse) VisitCreateGroupResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type DeleteGroupRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type DeleteGroupResponseObject interface {
+	VisitDeleteGroupResponse(w http.ResponseWriter) error
+}
+
+type DeleteGroup204Response struct {
+}
+
+func (response DeleteGroup204Response) VisitDeleteGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteGroup404Response struct {
+}
+
+func (response DeleteGroup404Response) VisitDeleteGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
 type GetGroupRequestObject struct {
 	Id openapi_types.UUID `json:"id"`
 }
@@ -561,6 +855,32 @@ type GetGroup404Response struct {
 }
 
 func (response GetGroup404Response) VisitGetGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type UpdateGroupRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *UpdateGroupJSONRequestBody
+}
+
+type UpdateGroupResponseObject interface {
+	VisitUpdateGroupResponse(w http.ResponseWriter) error
+}
+
+type UpdateGroup200JSONResponse Group
+
+func (response UpdateGroup200JSONResponse) VisitUpdateGroupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateGroup404Response struct {
+}
+
+func (response UpdateGroup404Response) VisitUpdateGroupResponse(w http.ResponseWriter) error {
 	w.WriteHeader(404)
 	return nil
 }
@@ -607,6 +927,31 @@ func (response AddGroupMember404Response) VisitAddGroupMemberResponse(w http.Res
 	return nil
 }
 
+type RemoveGroupMemberRequestObject struct {
+	Id       openapi_types.UUID `json:"id"`
+	PersonId openapi_types.UUID `json:"person_id"`
+}
+
+type RemoveGroupMemberResponseObject interface {
+	VisitRemoveGroupMemberResponse(w http.ResponseWriter) error
+}
+
+type RemoveGroupMember204Response struct {
+}
+
+func (response RemoveGroupMember204Response) VisitRemoveGroupMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveGroupMember404Response struct {
+}
+
+func (response RemoveGroupMember404Response) VisitRemoveGroupMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
 type ListInvitesRequestObject struct {
 }
 
@@ -640,6 +985,30 @@ func (response CreateInvite201JSONResponse) VisitCreateInviteResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
+type DeleteInviteRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type DeleteInviteResponseObject interface {
+	VisitDeleteInviteResponse(w http.ResponseWriter) error
+}
+
+type DeleteInvite204Response struct {
+}
+
+func (response DeleteInvite204Response) VisitDeleteInviteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteInvite404Response struct {
+}
+
+func (response DeleteInvite404Response) VisitDeleteInviteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
 type GetInviteRequestObject struct {
 	Id openapi_types.UUID `json:"id"`
 }
@@ -661,6 +1030,32 @@ type GetInvite404Response struct {
 }
 
 func (response GetInvite404Response) VisitGetInviteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type UpdateInviteRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *UpdateInviteJSONRequestBody
+}
+
+type UpdateInviteResponseObject interface {
+	VisitUpdateInviteResponse(w http.ResponseWriter) error
+}
+
+type UpdateInvite200JSONResponse Invite
+
+func (response UpdateInvite200JSONResponse) VisitUpdateInviteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateInvite404Response struct {
+}
+
+func (response UpdateInvite404Response) VisitUpdateInviteResponse(w http.ResponseWriter) error {
 	w.WriteHeader(404)
 	return nil
 }
@@ -698,6 +1093,30 @@ func (response CreatePerson201JSONResponse) VisitCreatePersonResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
+type DeletePersonRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type DeletePersonResponseObject interface {
+	VisitDeletePersonResponse(w http.ResponseWriter) error
+}
+
+type DeletePerson204Response struct {
+}
+
+func (response DeletePerson204Response) VisitDeletePersonResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeletePerson404Response struct {
+}
+
+func (response DeletePerson404Response) VisitDeletePersonResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
 type GetPersonRequestObject struct {
 	Id openapi_types.UUID `json:"id"`
 }
@@ -723,6 +1142,32 @@ func (response GetPerson404Response) VisitGetPersonResponse(w http.ResponseWrite
 	return nil
 }
 
+type UpdatePersonRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *UpdatePersonJSONRequestBody
+}
+
+type UpdatePersonResponseObject interface {
+	VisitUpdatePersonResponse(w http.ResponseWriter) error
+}
+
+type UpdatePerson200JSONResponse Person
+
+func (response UpdatePerson200JSONResponse) VisitUpdatePersonResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdatePerson404Response struct {
+}
+
+func (response UpdatePerson404Response) VisitUpdatePersonResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// List all groups
@@ -731,33 +1176,54 @@ type StrictServerInterface interface {
 	// Create a new group
 	// (POST /groups)
 	CreateGroup(ctx context.Context, request CreateGroupRequestObject) (CreateGroupResponseObject, error)
+	// Delete a group
+	// (DELETE /groups/{id})
+	DeleteGroup(ctx context.Context, request DeleteGroupRequestObject) (DeleteGroupResponseObject, error)
 	// Get a group by ID
 	// (GET /groups/{id})
 	GetGroup(ctx context.Context, request GetGroupRequestObject) (GetGroupResponseObject, error)
+	// Update a group
+	// (PATCH /groups/{id})
+	UpdateGroup(ctx context.Context, request UpdateGroupRequestObject) (UpdateGroupResponseObject, error)
 	// List members of a group
 	// (GET /groups/{id}/members)
 	ListGroupMembers(ctx context.Context, request ListGroupMembersRequestObject) (ListGroupMembersResponseObject, error)
 	// Add a member to a group
 	// (POST /groups/{id}/members)
 	AddGroupMember(ctx context.Context, request AddGroupMemberRequestObject) (AddGroupMemberResponseObject, error)
+	// Remove a member from a group
+	// (DELETE /groups/{id}/members/{person_id})
+	RemoveGroupMember(ctx context.Context, request RemoveGroupMemberRequestObject) (RemoveGroupMemberResponseObject, error)
 	// List all invites
 	// (GET /invites)
 	ListInvites(ctx context.Context, request ListInvitesRequestObject) (ListInvitesResponseObject, error)
 	// Create a new invite
 	// (POST /invites)
 	CreateInvite(ctx context.Context, request CreateInviteRequestObject) (CreateInviteResponseObject, error)
+	// Delete an invite
+	// (DELETE /invites/{id})
+	DeleteInvite(ctx context.Context, request DeleteInviteRequestObject) (DeleteInviteResponseObject, error)
 	// Get an invite by ID
 	// (GET /invites/{id})
 	GetInvite(ctx context.Context, request GetInviteRequestObject) (GetInviteResponseObject, error)
+	// Update an invite
+	// (PATCH /invites/{id})
+	UpdateInvite(ctx context.Context, request UpdateInviteRequestObject) (UpdateInviteResponseObject, error)
 	// List all persons
 	// (GET /persons)
 	ListPersons(ctx context.Context, request ListPersonsRequestObject) (ListPersonsResponseObject, error)
 	// Create a new person
 	// (POST /persons)
 	CreatePerson(ctx context.Context, request CreatePersonRequestObject) (CreatePersonResponseObject, error)
+	// Delete a person
+	// (DELETE /persons/{id})
+	DeletePerson(ctx context.Context, request DeletePersonRequestObject) (DeletePersonResponseObject, error)
 	// Get a person by ID
 	// (GET /persons/{id})
 	GetPerson(ctx context.Context, request GetPersonRequestObject) (GetPersonResponseObject, error)
+	// Update a person
+	// (PATCH /persons/{id})
+	UpdatePerson(ctx context.Context, request UpdatePersonRequestObject) (UpdatePersonResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -844,6 +1310,32 @@ func (sh *strictHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// DeleteGroup operation middleware
+func (sh *strictHandler) DeleteGroup(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request DeleteGroupRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteGroup(ctx, request.(DeleteGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteGroupResponseObject); ok {
+		if err := validResponse.VisitDeleteGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetGroup operation middleware
 func (sh *strictHandler) GetGroup(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	var request GetGroupRequestObject
@@ -863,6 +1355,39 @@ func (sh *strictHandler) GetGroup(w http.ResponseWriter, r *http.Request, id ope
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetGroupResponseObject); ok {
 		if err := validResponse.VisitGetGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateGroup operation middleware
+func (sh *strictHandler) UpdateGroup(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request UpdateGroupRequestObject
+
+	request.Id = id
+
+	var body UpdateGroupJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateGroup(ctx, request.(UpdateGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateGroupResponseObject); ok {
+		if err := validResponse.VisitUpdateGroupResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -929,6 +1454,33 @@ func (sh *strictHandler) AddGroupMember(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// RemoveGroupMember operation middleware
+func (sh *strictHandler) RemoveGroupMember(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, personId openapi_types.UUID) {
+	var request RemoveGroupMemberRequestObject
+
+	request.Id = id
+	request.PersonId = personId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveGroupMember(ctx, request.(RemoveGroupMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveGroupMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveGroupMemberResponseObject); ok {
+		if err := validResponse.VisitRemoveGroupMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListInvites operation middleware
 func (sh *strictHandler) ListInvites(w http.ResponseWriter, r *http.Request) {
 	var request ListInvitesRequestObject
@@ -984,6 +1536,32 @@ func (sh *strictHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// DeleteInvite operation middleware
+func (sh *strictHandler) DeleteInvite(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request DeleteInviteRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteInvite(ctx, request.(DeleteInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteInviteResponseObject); ok {
+		if err := validResponse.VisitDeleteInviteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetInvite operation middleware
 func (sh *strictHandler) GetInvite(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	var request GetInviteRequestObject
@@ -1003,6 +1581,39 @@ func (sh *strictHandler) GetInvite(w http.ResponseWriter, r *http.Request, id op
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetInviteResponseObject); ok {
 		if err := validResponse.VisitGetInviteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateInvite operation middleware
+func (sh *strictHandler) UpdateInvite(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request UpdateInviteRequestObject
+
+	request.Id = id
+
+	var body UpdateInviteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateInvite(ctx, request.(UpdateInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateInviteResponseObject); ok {
+		if err := validResponse.VisitUpdateInviteResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1065,6 +1676,32 @@ func (sh *strictHandler) CreatePerson(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// DeletePerson operation middleware
+func (sh *strictHandler) DeletePerson(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request DeletePersonRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeletePerson(ctx, request.(DeletePersonRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeletePerson")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeletePersonResponseObject); ok {
+		if err := validResponse.VisitDeletePersonResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetPerson operation middleware
 func (sh *strictHandler) GetPerson(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	var request GetPersonRequestObject
@@ -1091,24 +1728,60 @@ func (sh *strictHandler) GetPerson(w http.ResponseWriter, r *http.Request, id op
 	}
 }
 
+// UpdatePerson operation middleware
+func (sh *strictHandler) UpdatePerson(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request UpdatePersonRequestObject
+
+	request.Id = id
+
+	var body UpdatePersonJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdatePerson(ctx, request.(UpdatePersonRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdatePerson")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdatePersonResponseObject); ok {
+		if err := validResponse.VisitUpdatePersonResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/9RWTW/jOAz9KwJ3j94mszMn37I7QBFgpyj2OhgUqsW0GtiSRqJbBIX/+0IfdpzETpy0",
-	"DbY3JyJF8vE9Ui9Q6MpohYoc5C/gikesePhcCHFtdW2+YXWP9l/8VaMjf2CsNmhJYjAzaJ1Wd1L4Hytt",
-	"K06QQ11LARnQ2iDk4MhK9QBNk4HFX7W0KCD/3nP90Znq+59YEDQZhOD78QS6wkpDUiv/cydCBpMSyUDx",
-	"Cgf8dzIMvsF0KMOlepKE+ykWFjmhuOO0lYrghH+QrHAon2Nlidpyf3in9lGAr+mQScUUV9phoZVwmzhS",
-	"ET6g9RetrK6mpzURTUec6pAYqrqKvVXCH2bAC5JP/nLPtBIJ/Q0FVwWWJfZbv7mOJJU4CAPpqbkPdTLe",
-	"mzDI+n3qShjq8w0+n0nGaSwbJdgNPo9x7ES+vJYH79CRrWaMVH8bJsR+9VhxWW7Fjf+cLfTWfbQVb5DJ",
-	"20+mI1l7H6lWoUGpgWlmscXtEjJ4QuviBPl0Nb+a++jaoOJGQg6fr+ZXnyEDw+kxlDp78CIInw8YRpsH",
-	"IrBsKSCHf6Sj62jic3VGKxdB+nM+D3NRK0IVPLkxpSyC7+xnAjbuHv8lCavg+LvFFeTw22yzpWZpRc2i",
-	"JJuuam4tX8eit6fjgpXSEdMrlgrwJq6uKm7XKW3Gy7I7zcBoN1Df32FcxLCxGejoLy3WJ9V2qKRu0DTb",
-	"7SZbY7OH6ac3i9sLug1dLFnsIBb/ZZwpfI6oBYPEj9mLFM0oSa6RWgQNt7xCQusg//4C0gf0ZGsJnUeS",
-	"b8OQ9Uo69tr48UoangXZokUkgy/zL/u7+kYTW+la7YJ6jcR49GX3a7b8uofprAovsQkC/JYMPwDGk6Se",
-	"hu9JWo+PS+efRPSIPZruKD+B6l34pnXDE2D7SXwxeN9+0Ay/7SdNnQFKL4TwM2KE8CEQ05bFLjI1IoCF",
-	"EIyndjDSm254Gciwtg5Tf5lsLsHI9Cw7iZFtDSPrpzs+vH9S5HdbQG1ll91A/agnryDZOm+IcnQJdTB+",
-	"6C00DttCdbCcs4ha7/4qShP1oAZvk83/fCuMabA7PqzBFPndNNhWdlkN9qOerEHTOm+IclSDHYwfWoPj",
-	"sC06VM56C0bnToFN818AAAD//zoXsXytEwAA",
+	"H4sIAAAAAAAC/9xYS2/bOBD+KwR3j9rY3fbkm3cDBAG2QVBgT0URMOI4ZmGRLDlKYBj67wUfetmSIyW2",
+	"kvZmi4+Z+eab+Uba0VRlWkmQaOliR226hoz5n0vOr4zK9WfI7sF8gR85WHQL2igNBgX4bRqMVfJOcPdn",
+	"pUzGkC5ongtOE4pbDXRBLRohH2hRJNTAj1wY4HTxtXH0W7VV3X+HFGmRUG/80B4HmxqhUSjp/u5ZSOgg",
+	"RxIqWQYd5/c89Gf91i4Pr+WjQDh0MTXAEPgdw5YrnCH8hSKDLn+eC4vnhrnFO3mIAr2Mi0RIIplUFlIl",
+	"ua3tCInwAMZdtDIqG+7WQDQtMsy9YyDzLORWcreYUJaieHSXO6ZtAMHdkDKZwmYDzdTX16HADXTCgGqo",
+	"712ZDPdGDJJmnqoQuvJ8A08vJOMwlvUS7Aae+jg2ki+v5cEZMtJKRk/0t75DHEYPGROblt3w5MWFXh7v",
+	"TcUJPDl9Z3rW6/+1y8fJydtj551w9X02ox7MzsrwPZvukZAr73WMKmoYWd5e04Q+grFBUT5czC/m7nKl",
+	"QTIt6IJ+vJhffKQJ1QzX3sXZg+OV//kAXupcAD6T15wu6H/C4lXY4rhrtZI2BPf3fO51UkkE6U8yrTci",
+	"9Wdn3yMgYRZxvwRC5g/+aWBFF/SPWT21zOLIMgssr6NmxrBtCLqtlkuyERaJWpEYgNti8yxjZhvdJmyz",
+	"qVYTqpXtiO9fLx/BbChOsPiP4ttRsR0LqRKeol3+aHIoDjD9cDK7DaNt6ELIfA+x8JQwIuEpoOY3RH7M",
+	"doIXoQ24gjvE8dI/L3HUzLAMEIyli687KpxZR7myzS1C62uDkTQCe24G/XYA3KeOiQpCcygS+qlr/UYh",
+	"Walc7kMRzhFWwpB0l8YV4BvGOz8/UZY1AKPwuwIswSP3W3J96cuPYbo+BLEpblPhePoab0YxqMwnyF7w",
+	"aTz7w7ma/XtNYJb5V8kBivE5bvwFymOQNkWVHyVO4e3Yunc6XEMD0j2piqC6I4220y1Z7Xf6X7hquj9O",
+	"DKqfDj4vOT/Cdm+IKENCFonsYf+Sc8JiOgiqZ8tgtqs+gBzVxy+QqUeYOG9J56X1F5uzK3CIuj8rsUWs",
+	"he5NSLiizol7jWhnRfjp93hDuo57pugT8Q1qVJ8oY+iZYqvl42NstHy2ObaMbNpBtml19CQrysM1UQbO",
+	"shWYv8cwKyso+sfZtwx5PgFflk0Qxo+05emBQ+3EaJ5rqh1T9FMk8bVzrWz1hDigHRWP27jnnQ+ZfeJR",
+	"LR8Xj2j5bOJRRjateDStjhYPXR6uiTJQPCowf5MvIbqiZZ92vGXE8wnosmxg8IKvIeHwQOWYGMtzKceY",
+	"ip8iha/+IlL1g6L4GQAA///qdPfHdB8AAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

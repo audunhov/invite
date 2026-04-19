@@ -40,6 +40,27 @@ func TestCreatePersonAPI(t *testing.T) {
 	p, err := queries.GetPerson(ctx, successRes.Id)
 	require.NoError(t, err)
 	require.Equal(t, p.Email, email)
+
+	// Test Update
+	newName := "Updated Name"
+	updateReq := api.UpdatePersonRequestObject{
+		Id: successRes.Id,
+		Body: &api.UpdatePerson{
+			Name: &newName,
+		},
+	}
+	updateRes, err := server.UpdatePerson(ctx, updateReq)
+	require.NoError(t, err)
+	updatedPerson := updateRes.(api.UpdatePerson200JSONResponse)
+	require.Equal(t, updatedPerson.Name, newName)
+
+	// Test Delete
+	deleteRes, err := server.DeletePerson(ctx, api.DeletePersonRequestObject{Id: successRes.Id})
+	require.NoError(t, err)
+	require.IsType(t, api.DeletePerson204Response{}, deleteRes)
+
+	_, err = queries.GetPerson(ctx, successRes.Id)
+	require.Error(t, err)
 }
 
 func TestInviteAPI(t *testing.T) {
@@ -74,6 +95,25 @@ func TestInviteAPI(t *testing.T) {
 	getSuccessRes, ok := getRes.(api.GetInvite200JSONResponse)
 	require.True(t, ok)
 	require.Equal(t, getSuccessRes.Id, successRes.Id)
+
+	// Update Invite
+	newTitle := "Updated Title"
+	newStatus := api.UpdateInviteStatusActive
+	updateRes, err := server.UpdateInvite(ctx, api.UpdateInviteRequestObject{
+		Id: successRes.Id,
+		Body: &api.UpdateInvite{
+			Title:  &newTitle,
+			Status: &newStatus,
+		},
+	})
+	require.NoError(t, err)
+	updatedInvite := updateRes.(api.UpdateInvite200JSONResponse)
+	require.Equal(t, updatedInvite.Title, newTitle)
+	require.Equal(t, string(updatedInvite.Status), string(newStatus))
+
+	// Delete Invite
+	_, err = server.DeleteInvite(ctx, api.DeleteInviteRequestObject{Id: successRes.Id})
+	require.NoError(t, err)
 }
 
 func TestGroupAPI(t *testing.T) {
@@ -123,4 +163,19 @@ func TestGroupAPI(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, listSuccessRes, 1)
 	require.Equal(t, listSuccessRes[0].Id, person.Id)
+
+	// 5. Remove Member
+	_, err = server.RemoveGroupMember(ctx, api.RemoveGroupMemberRequestObject{
+		Id:       successRes.Id,
+		PersonId: person.Id,
+	})
+	require.NoError(t, err)
+
+	listRes2, _ := server.ListGroupMembers(ctx, api.ListGroupMembersRequestObject{Id: successRes.Id})
+	listSuccessRes2 := listRes2.(api.ListGroupMembers200JSONResponse)
+	require.Len(t, listSuccessRes2, 0)
+
+	// 6. Delete Group
+	_, err = server.DeleteGroup(ctx, api.DeleteGroupRequestObject{Id: successRes.Id})
+	require.NoError(t, err)
 }

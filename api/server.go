@@ -114,6 +114,40 @@ func (s *Server) GetPerson(ctx context.Context, request GetPersonRequestObject) 
 	}), nil
 }
 
+func (s *Server) UpdatePerson(ctx context.Context, request UpdatePersonRequestObject) (UpdatePersonResponseObject, error) {
+	params := db.UpdatePersonParams{
+		ID: request.Id,
+	}
+	if request.Body.Email != nil {
+		params.Email = sql.NullString{String: string(*request.Body.Email), Valid: true}
+	}
+	if request.Body.Name != nil {
+		params.Name = sql.NullString{String: *request.Body.Name, Valid: true}
+	}
+
+	p, err := s.Queries.UpdatePerson(ctx, params)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return UpdatePerson404Response{}, nil
+		}
+		return nil, err
+	}
+
+	return UpdatePerson200JSONResponse(Person{
+		Id:    p.ID,
+		Email: types.Email(p.Email),
+		Name:  p.Name,
+	}), nil
+}
+
+func (s *Server) DeletePerson(ctx context.Context, request DeletePersonRequestObject) (DeletePersonResponseObject, error) {
+	err := s.Queries.DeletePerson(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+	return DeletePerson204Response{}, nil
+}
+
 // Group Handlers
 func (s *Server) ListGroups(ctx context.Context, request ListGroupsRequestObject) (ListGroupsResponseObject, error) {
 	groups, err := s.Queries.ListGroups(ctx)
@@ -166,6 +200,40 @@ func (s *Server) GetGroup(ctx context.Context, request GetGroupRequestObject) (G
 	}), nil
 }
 
+func (s *Server) UpdateGroup(ctx context.Context, request UpdateGroupRequestObject) (UpdateGroupResponseObject, error) {
+	params := db.UpdateGroupParams{
+		ID: request.Id,
+	}
+	if request.Body.Name != nil {
+		params.Name = sql.NullString{String: *request.Body.Name, Valid: true}
+	}
+	if request.Body.Description != nil {
+		params.Description = sql.NullString{String: *request.Body.Description, Valid: true}
+	}
+
+	g, err := s.Queries.UpdateGroup(ctx, params)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return UpdateGroup404Response{}, nil
+		}
+		return nil, err
+	}
+
+	return UpdateGroup200JSONResponse(Group{
+		Id:          g.ID,
+		Name:        g.Name,
+		Description: toStringPtr(g.Description),
+	}), nil
+}
+
+func (s *Server) DeleteGroup(ctx context.Context, request DeleteGroupRequestObject) (DeleteGroupResponseObject, error) {
+	err := s.Queries.DeleteGroup(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+	return DeleteGroup204Response{}, nil
+}
+
 func (s *Server) ListGroupMembers(ctx context.Context, request ListGroupMembersRequestObject) (ListGroupMembersResponseObject, error) {
 	persons, err := s.Queries.ListGroupMembers(ctx, request.Id)
 	if err != nil {
@@ -191,11 +259,22 @@ func (s *Server) AddGroupMember(ctx context.Context, request AddGroupMemberReque
 		ContactID: request.Body.PersonId,
 	})
 	if err != nil {
-		// In a real app we might want to check if the error is a foreign key constraint violation
 		return nil, err
 	}
 
 	return AddGroupMember204Response{}, nil
+}
+
+func (s *Server) RemoveGroupMember(ctx context.Context, request RemoveGroupMemberRequestObject) (RemoveGroupMemberResponseObject, error) {
+	err := s.Queries.RemoveGroupMember(ctx, db.RemoveGroupMemberParams{
+		GroupID:   request.Id,
+		ContactID: request.PersonId,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return RemoveGroupMember204Response{}, nil
 }
 
 // Invite Handlers
@@ -268,4 +347,55 @@ func (s *Server) GetInvite(ctx context.Context, request GetInviteRequestObject) 
 		CreatedAt:   i.CreatedAt,
 		Status:      InviteStatus(i.Status),
 	}), nil
+}
+
+func (s *Server) UpdateInvite(ctx context.Context, request UpdateInviteRequestObject) (UpdateInviteResponseObject, error) {
+	params := db.UpdateInviteParams{
+		ID: request.Id,
+	}
+	if request.Body.Title != nil {
+		params.Title = sql.NullString{String: *request.Body.Title, Valid: true}
+	}
+	if request.Body.Description != nil {
+		params.Description = sql.NullString{String: *request.Body.Description, Valid: true}
+	}
+	if request.Body.From != nil {
+		params.From = sql.NullTime{Time: *request.Body.From, Valid: true}
+	}
+	if request.Body.To != nil {
+		params.To = sql.NullTime{Time: *request.Body.To, Valid: true}
+	}
+	if request.Body.DurationNs != nil {
+		params.Duration = sql.NullInt64{Int64: int64(*request.Body.DurationNs), Valid: true}
+	}
+	if request.Body.Status != nil {
+		params.Status = sql.NullString{String: string(*request.Body.Status), Valid: true}
+	}
+
+	i, err := s.Queries.UpdateInvite(ctx, params)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return UpdateInvite404Response{}, nil
+		}
+		return nil, err
+	}
+
+	return UpdateInvite200JSONResponse(Invite{
+		Id:          i.ID,
+		Title:       i.Title,
+		Description: toStringPtr(i.Description),
+		From:        i.From,
+		To:          toTimePtr(i.To),
+		DurationNs:  toIntPtr(i.Duration),
+		CreatedAt:   i.CreatedAt,
+		Status:      InviteStatus(i.Status),
+	}), nil
+}
+
+func (s *Server) DeleteInvite(ctx context.Context, request DeleteInviteRequestObject) (DeleteInviteResponseObject, error) {
+	err := s.Queries.DeleteInvite(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+	return DeleteInvite204Response{}, nil
 }

@@ -7,6 +7,17 @@ INSERT INTO persons (id, email, name) VALUES ($1, $2, $3) RETURNING *;
 -- name: ListPersons :many
 SELECT * FROM persons;
 
+-- name: UpdatePerson :one
+UPDATE persons
+SET 
+    email = COALESCE(sqlc.narg('email'), email),
+    name = COALESCE(sqlc.narg('name'), name)
+WHERE id = sqlc.arg('id')
+RETURNING *;
+
+-- name: DeletePerson :exec
+DELETE FROM persons WHERE id = $1;
+
 -- name: GetInvite :one
 SELECT * FROM invites WHERE id = $1;
 
@@ -17,6 +28,21 @@ SELECT * FROM invites;
 INSERT INTO invites (id, title, description, "from", "to", duration, created_at, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
+
+-- name: UpdateInvite :one
+UPDATE invites
+SET 
+    title = COALESCE(sqlc.narg('title'), title),
+    description = COALESCE(sqlc.narg('description'), description),
+    "from" = COALESCE(sqlc.narg('from'), "from"),
+    "to" = COALESCE(sqlc.narg('to'), "to"),
+    duration = COALESCE(sqlc.narg('duration'), duration),
+    status = COALESCE(sqlc.narg('status'), status)
+WHERE id = sqlc.arg('id')
+RETURNING *;
+
+-- name: DeleteInvite :exec
+DELETE FROM invites WHERE id = $1;
 
 -- name: GetGroup :one
 SELECT * FROM groups WHERE id = $1;
@@ -29,6 +55,17 @@ INSERT INTO groups (id, name, description)
 VALUES ($1, $2, $3)
 RETURNING *;
 
+-- name: UpdateGroup :one
+UPDATE groups
+SET 
+    name = COALESCE(sqlc.narg('name'), name),
+    description = COALESCE(sqlc.narg('description'), description)
+WHERE id = sqlc.arg('id')
+RETURNING *;
+
+-- name: DeleteGroup :exec
+DELETE FROM groups WHERE id = $1;
+
 -- name: ListGroupMembers :many
 SELECT p.* FROM persons p
 JOIN group_members gm ON p.id = gm.contact_id
@@ -37,6 +74,9 @@ WHERE gm.group_id = $1;
 -- name: AddGroupMember :exec
 INSERT INTO group_members (id, contact_id, group_id)
 VALUES ($1, $2, $3);
+
+-- name: RemoveGroupMember :exec
+DELETE FROM group_members WHERE group_id = $1 AND contact_id = $2;
 
 -- name: GetActivePhasesToProcess :many
 SELECT 
