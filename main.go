@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -12,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 
+	"invite/api"
 	"invite/db"
 )
 
@@ -327,7 +329,40 @@ func (ls *SprintStrategy) HandleEvent(ctx context.Context, invite Invite, phase 
 
 func main() {
 	fmt.Println("Invite application starting...")
-	// In a real scenario, we would initialize the DB and start the orchestrator here.
+
+	// Mock DB connection for now (replace with actual connection string from env later)
+	dbConn, err := sql.Open("postgres", "postgres://user:password@localhost:5432/invitedoc?sslmode=disable")
+	if err != nil {
+		fmt.Printf("Failed to connect to db: %v\n", err)
+	}
+	defer dbConn.Close()
+
+	app := &App{
+		Queries: db.New(dbConn),
+		DB:      dbConn,
+	}
+
+	// Initialize API server
+	server := &api.Server{Queries: app.Queries}
+
+	// Create the strict handler
+	strictHandler := api.NewStrictHandler(server, nil)
+
+	// Create a standard http.ServeMux
+	mux := http.NewServeMux()
+
+	// Register the generated handlers to the mux
+	api.HandlerFromMux(strictHandler, mux)
+
+	// Start HTTP server in a separate goroutine
+	go func() {
+		fmt.Println("API server listening on :8080")
+		if err := http.ListenAndServe(":8080", mux); err != nil {
+			fmt.Printf("HTTP server error: %v\n", err)
+		}
+	}()
+
+	// In a real scenario, we would start the orchestrator here.
 	// For now, we'll just keep the main process alive.
 	select {}
 }

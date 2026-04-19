@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
+	"github.com/oapi-codegen/runtime/types"
 	"invite/db"
 )
 
@@ -25,7 +26,7 @@ func (s *Server) ListPersons(ctx context.Context, request ListPersonsRequestObje
 	for _, p := range persons {
 		res = append(res, Person{
 			Id:    p.ID,
-			Email: p.Email,
+			Email: types.Email(p.Email),
 			Name:  p.Name,
 		})
 	}
@@ -37,7 +38,7 @@ func (s *Server) CreatePerson(ctx context.Context, request CreatePersonRequestOb
 	newID := uuid.New()
 	p, err := s.Queries.CreatePerson(ctx, db.CreatePersonParams{
 		ID:    newID,
-		Email: request.Body.Email,
+		Email: string(request.Body.Email),
 		Name:  request.Body.Name,
 	})
 	if err != nil {
@@ -46,7 +47,7 @@ func (s *Server) CreatePerson(ctx context.Context, request CreatePersonRequestOb
 
 	return CreatePerson201JSONResponse(Person{
 		Id:    p.ID,
-		Email: p.Email,
+		Email: types.Email(p.Email),
 		Name:  p.Name,
 	}), nil
 }
@@ -62,7 +63,7 @@ func (s *Server) GetPerson(ctx context.Context, request GetPersonRequestObject) 
 
 	return GetPerson200JSONResponse(Person{
 		Id:    p.ID,
-		Email: p.Email,
+		Email: types.Email(p.Email),
 		Name:  p.Name,
 	}), nil
 }
