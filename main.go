@@ -53,12 +53,14 @@ type App struct {
 
 func (app *App) InvitePerson(ctx context.Context, i Invite, p Person) (*Invitee, error) {
 	inviteeID := uuid.New()
+	magicToken := uuid.New()
 	err := app.Queries.CreateInvitee(ctx, db.CreateInviteeParams{
-		ID:        inviteeID,
-		InviteID:  i.ID,
-		ContactID: p.ID,
-		State:     string(InviteeStatePending),
-		CreatedAt: time.Now(),
+		ID:         inviteeID,
+		InviteID:   i.ID,
+		ContactID:  p.ID,
+		State:      string(InviteeStatePending),
+		CreatedAt:  time.Now(),
+		MagicToken: magicToken,
 	})
 	if err != nil {
 		return nil, err

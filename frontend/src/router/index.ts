@@ -24,6 +24,11 @@ const router = createRouter({
       name: 'groups',
       component: () => import('../views/GroupsView.vue'),
     },
+    {
+      path: '/respond/:token',
+      name: 'respond',
+      component: () => import('../views/RespondView.vue'),
+    },
   ],
 })
 

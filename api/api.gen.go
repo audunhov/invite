@@ -66,6 +66,24 @@ func (e InvitePhaseStrategyKind) Valid() bool {
 	}
 }
 
+// Defines values for InviteResponseAction.
+const (
+	Accept  InviteResponseAction = "accept"
+	Decline InviteResponseAction = "decline"
+)
+
+// Valid indicates whether the value is a known member of the InviteResponseAction enum.
+func (e InviteResponseAction) Valid() bool {
+	switch e {
+	case Accept:
+		return true
+	case Decline:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NewInvitePhaseStrategyKind.
 const (
 	NewInvitePhaseStrategyKindLadder NewInvitePhaseStrategyKind = "ladder"
@@ -84,24 +102,48 @@ func (e NewInvitePhaseStrategyKind) Valid() bool {
 	}
 }
 
+// Defines values for PublicInviteDetailsCurrentState.
+const (
+	PublicInviteDetailsCurrentStateAccepted PublicInviteDetailsCurrentState = "accepted"
+	PublicInviteDetailsCurrentStateDeclined PublicInviteDetailsCurrentState = "declined"
+	PublicInviteDetailsCurrentStateExpired  PublicInviteDetailsCurrentState = "expired"
+	PublicInviteDetailsCurrentStatePending  PublicInviteDetailsCurrentState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the PublicInviteDetailsCurrentState enum.
+func (e PublicInviteDetailsCurrentState) Valid() bool {
+	switch e {
+	case PublicInviteDetailsCurrentStateAccepted:
+		return true
+	case PublicInviteDetailsCurrentStateDeclined:
+		return true
+	case PublicInviteDetailsCurrentStateExpired:
+		return true
+	case PublicInviteDetailsCurrentStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateInviteStatus.
 const (
-	UpdateInviteStatusActive    UpdateInviteStatus = "active"
-	UpdateInviteStatusCancelled UpdateInviteStatus = "cancelled"
-	UpdateInviteStatusCompleted UpdateInviteStatus = "completed"
-	UpdateInviteStatusPending   UpdateInviteStatus = "pending"
+	Active    UpdateInviteStatus = "active"
+	Cancelled UpdateInviteStatus = "cancelled"
+	Completed UpdateInviteStatus = "completed"
+	Pending   UpdateInviteStatus = "pending"
 )
 
 // Valid indicates whether the value is a known member of the UpdateInviteStatus enum.
 func (e UpdateInviteStatus) Valid() bool {
 	switch e {
-	case UpdateInviteStatusActive:
+	case Active:
 		return true
-	case UpdateInviteStatusCancelled:
+	case Cancelled:
 		return true
-	case UpdateInviteStatusCompleted:
+	case Completed:
 		return true
-	case UpdateInviteStatusPending:
+	case Pending:
 		return true
 	default:
 		return false
@@ -150,6 +192,14 @@ type InvitePhase struct {
 
 // InvitePhaseStrategyKind defines model for InvitePhase.StrategyKind.
 type InvitePhaseStrategyKind string
+
+// InviteResponse defines model for InviteResponse.
+type InviteResponse struct {
+	Action InviteResponseAction `json:"action"`
+}
+
+// InviteResponseAction defines model for InviteResponse.Action.
+type InviteResponseAction string
 
 // InviteStatusReport defines model for InviteStatusReport.
 type InviteStatusReport struct {
@@ -200,10 +250,11 @@ type NewPerson struct {
 
 // PendingInvitee defines model for PendingInvitee.
 type PendingInvitee struct {
-	Email     openapi_types.Email `json:"email"`
-	Id        openapi_types.UUID  `json:"id"`
-	InvitedAt time.Time           `json:"invited_at"`
-	Name      string              `json:"name"`
+	Email      openapi_types.Email `json:"email"`
+	Id         openapi_types.UUID  `json:"id"`
+	InvitedAt  time.Time           `json:"invited_at"`
+	MagicToken openapi_types.UUID  `json:"magic_token"`
+	Name       string              `json:"name"`
 }
 
 // Person defines model for Person.
@@ -212,6 +263,19 @@ type Person struct {
 	Id    openapi_types.UUID  `json:"id"`
 	Name  string              `json:"name"`
 }
+
+// PublicInviteDetails defines model for PublicInviteDetails.
+type PublicInviteDetails struct {
+	CurrentState PublicInviteDetailsCurrentState `json:"current_state"`
+	Description  *string                         `json:"description,omitempty"`
+	From         time.Time                       `json:"from"`
+	InviteId     openapi_types.UUID              `json:"invite_id"`
+	Title        string                          `json:"title"`
+	To           *time.Time                      `json:"to,omitempty"`
+}
+
+// PublicInviteDetailsCurrentState defines model for PublicInviteDetails.CurrentState.
+type PublicInviteDetailsCurrentState string
 
 // UpdateGroup defines model for UpdateGroup.
 type UpdateGroup struct {
@@ -261,6 +325,9 @@ type CreatePersonJSONRequestBody = NewPerson
 
 // UpdatePersonJSONRequestBody defines body for UpdatePerson for application/json ContentType.
 type UpdatePersonJSONRequestBody = UpdatePerson
+
+// RespondToInviteJSONRequestBody defines body for RespondToInvite for application/json ContentType.
+type RespondToInviteJSONRequestBody = InviteResponse
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -333,6 +400,12 @@ type ServerInterface interface {
 	// Update a person
 	// (PATCH /persons/{id})
 	UpdatePerson(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// Get invite details for response
+	// (GET /respond/{token})
+	GetInviteForResponse(w http.ResponseWriter, r *http.Request, token openapi_types.UUID)
+	// Accept or decline an invite
+	// (POST /respond/{token})
+	RespondToInvite(w http.ResponseWriter, r *http.Request, token openapi_types.UUID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -871,6 +944,56 @@ func (siw *ServerInterfaceWrapper) UpdatePerson(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// GetInviteForResponse operation middleware
+func (siw *ServerInterfaceWrapper) GetInviteForResponse(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "token" -------------
+	var token openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "token", r.PathValue("token"), &token, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetInviteForResponse(w, r, token)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RespondToInvite operation middleware
+func (siw *ServerInterfaceWrapper) RespondToInvite(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "token" -------------
+	var token openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "token", r.PathValue("token"), &token, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RespondToInvite(w, r, token)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1014,6 +1137,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/persons/{id}", wrapper.DeletePerson)
 	m.HandleFunc("GET "+options.BaseURL+"/persons/{id}", wrapper.GetPerson)
 	m.HandleFunc("PATCH "+options.BaseURL+"/persons/{id}", wrapper.UpdatePerson)
+	m.HandleFunc("GET "+options.BaseURL+"/respond/{token}", wrapper.GetInviteForResponse)
+	m.HandleFunc("POST "+options.BaseURL+"/respond/{token}", wrapper.RespondToInvite)
 
 	return m
 }
@@ -1526,6 +1651,56 @@ func (response UpdatePerson404Response) VisitUpdatePersonResponse(w http.Respons
 	return nil
 }
 
+type GetInviteForResponseRequestObject struct {
+	Token openapi_types.UUID `json:"token"`
+}
+
+type GetInviteForResponseResponseObject interface {
+	VisitGetInviteForResponseResponse(w http.ResponseWriter) error
+}
+
+type GetInviteForResponse200JSONResponse PublicInviteDetails
+
+func (response GetInviteForResponse200JSONResponse) VisitGetInviteForResponseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetInviteForResponse404Response struct {
+}
+
+func (response GetInviteForResponse404Response) VisitGetInviteForResponseResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type RespondToInviteRequestObject struct {
+	Token openapi_types.UUID `json:"token"`
+	Body  *RespondToInviteJSONRequestBody
+}
+
+type RespondToInviteResponseObject interface {
+	VisitRespondToInviteResponse(w http.ResponseWriter) error
+}
+
+type RespondToInvite204Response struct {
+}
+
+func (response RespondToInvite204Response) VisitRespondToInviteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RespondToInvite404Response struct {
+}
+
+func (response RespondToInvite404Response) VisitRespondToInviteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// List all groups
@@ -1597,6 +1772,12 @@ type StrictServerInterface interface {
 	// Update a person
 	// (PATCH /persons/{id})
 	UpdatePerson(ctx context.Context, request UpdatePersonRequestObject) (UpdatePersonResponseObject, error)
+	// Get invite details for response
+	// (GET /respond/{token})
+	GetInviteForResponse(ctx context.Context, request GetInviteForResponseRequestObject) (GetInviteForResponseResponseObject, error)
+	// Accept or decline an invite
+	// (POST /respond/{token})
+	RespondToInvite(ctx context.Context, request RespondToInviteRequestObject) (RespondToInviteResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -2272,35 +2453,97 @@ func (sh *strictHandler) UpdatePerson(w http.ResponseWriter, r *http.Request, id
 	}
 }
 
+// GetInviteForResponse operation middleware
+func (sh *strictHandler) GetInviteForResponse(w http.ResponseWriter, r *http.Request, token openapi_types.UUID) {
+	var request GetInviteForResponseRequestObject
+
+	request.Token = token
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetInviteForResponse(ctx, request.(GetInviteForResponseRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetInviteForResponse")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetInviteForResponseResponseObject); ok {
+		if err := validResponse.VisitGetInviteForResponseResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RespondToInvite operation middleware
+func (sh *strictHandler) RespondToInvite(w http.ResponseWriter, r *http.Request, token openapi_types.UUID) {
+	var request RespondToInviteRequestObject
+
+	request.Token = token
+
+	var body RespondToInviteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RespondToInvite(ctx, request.(RespondToInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RespondToInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RespondToInviteResponseObject); ok {
+		if err := validResponse.VisitRespondToInviteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"6Wv9LAAA",
+	"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",
+	"ZAxvrjf/BgAA//8DRPbJYTIAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

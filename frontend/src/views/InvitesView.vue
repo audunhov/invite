@@ -249,6 +249,13 @@ async function openStatusModal(invite: Invite) {
   }
 }
 
+function copyLink(token: string) {
+  const url = `${window.location.origin}/respond/${token}`
+  navigator.clipboard.writeText(url).then(() => {
+    alert('Link copied to clipboard!')
+  })
+}
+
 onMounted(fetchData)
 </script>
 
@@ -462,9 +469,19 @@ onMounted(fetchData)
               <div>
                 <label class="text-xs font-bold uppercase text-gray-500">Waiting For ({{ statusReport.pending_invitees?.length || 0 }})</label>
                 <ul class="mt-2 divide-y divide-gray-100 dark:divide-white/5">
-                  <li v-for="p in statusReport.pending_invitees" :key="p.id" class="py-2">
-                    <p class="text-sm font-medium">{{ p.name }}</p>
-                    <p class="text-xs text-gray-500">{{ p.email }}</p>
+                  <li v-for="p in statusReport.pending_invitees" :key="p.id" class="py-3">
+                    <div class="flex justify-between items-start">
+                      <div>
+                        <p class="text-sm font-medium text-gray-900 dark:text-white">{{ p.name }}</p>
+                        <p class="text-xs text-gray-500">{{ p.email }}</p>
+                      </div>
+                      <button 
+                        @click="copyLink(p.magic_token)"
+                        class="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        Copy Link
+                      </button>
+                    </div>
                   </li>
                 </ul>
               </div>

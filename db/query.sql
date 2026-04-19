@@ -99,7 +99,7 @@ LIMIT 1;
 SELECT * FROM invite_phases WHERE id = $1;
 
 -- name: GetPendingInvitees :many
-SELECT p.id, p.email, p.name, i.created_at AS invited_at
+SELECT p.id, p.email, p.name, i.created_at AS invited_at, i.magic_token
 FROM invitees i
 JOIN persons p ON i.contact_id = p.id
 WHERE i.invite_id = $1 AND i.state = 'pending'
@@ -148,8 +148,8 @@ SET status = $2, next_check_at = $3, data = $4
 WHERE phase_id = $1;
 
 -- name: CreateInvitee :exec
-INSERT INTO invitees (id, invite_id, contact_id, state, created_at)
-VALUES ($1, $2, $3, $4, $5);
+INSERT INTO invitees (id, invite_id, contact_id, state, created_at, magic_token)
+VALUES ($1, $2, $3, $4, $5, $6);
 
 -- name: CreatePhaseState :exec
 INSERT INTO invite_phase_state (phase_id, status, next_check_at, data)
@@ -157,6 +157,15 @@ VALUES ($1, $2, $3, $4);
 
 -- name: GetInvitee :one
 SELECT * FROM invitees WHERE id = $1;
+
+-- name: GetInviteeByToken :one
+SELECT i.*, inv.title, inv.description as invite_description, inv."from", inv."to"
+FROM invitees i
+JOIN invites inv ON i.invite_id = inv.id
+WHERE i.magic_token = $1;
+
+-- name: RespondToInvite :exec
+UPDATE invitees SET state = $2 WHERE magic_token = $1;
 
 -- name: ResolveRecipients :many
 SELECT p.id, p.email, p.name

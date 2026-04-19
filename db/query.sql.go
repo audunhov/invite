@@ -126,16 +126,17 @@ func (q *Queries) CreateInvitePhase(ctx context.Context, arg CreateInvitePhasePa
 }
 
 const createInvitee = `-- name: CreateInvitee :exec
-INSERT INTO invitees (id, invite_id, contact_id, state, created_at)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO invitees (id, invite_id, contact_id, state, created_at, magic_token)
+VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type CreateInviteeParams struct {
-	ID        uuid.UUID `json:"id"`
-	InviteID  uuid.UUID `json:"invite_id"`
-	ContactID uuid.UUID `json:"contact_id"`
-	State     string    `json:"state"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         uuid.UUID `json:"id"`
+	InviteID   uuid.UUID `json:"invite_id"`
+	ContactID  uuid.UUID `json:"contact_id"`
+	State      string    `json:"state"`
+	CreatedAt  time.Time `json:"created_at"`
+	MagicToken uuid.UUID `json:"magic_token"`
 }
 
 func (q *Queries) CreateInvitee(ctx context.Context, arg CreateInviteeParams) error {
@@ -145,6 +146,7 @@ func (q *Queries) CreateInvitee(ctx context.Context, arg CreateInviteeParams) er
 		arg.ContactID,
 		arg.State,
 		arg.CreatedAt,
+		arg.MagicToken,
 	)
 	return err
 }
@@ -421,7 +423,7 @@ func (q *Queries) GetInvitePhase(ctx context.Context, id uuid.UUID) (InvitePhase
 }
 
 const getInvitee = `-- name: GetInvitee :one
-SELECT id, invite_id, contact_id, state, created_at FROM invitees WHERE id = $1
+SELECT id, invite_id, contact_id, state, created_at, magic_token FROM invitees WHERE id = $1
 `
 
 func (q *Queries) GetInvitee(ctx context.Context, id uuid.UUID) (Invitee, error) {
@@ -433,12 +435,51 @@ func (q *Queries) GetInvitee(ctx context.Context, id uuid.UUID) (Invitee, error)
 		&i.ContactID,
 		&i.State,
 		&i.CreatedAt,
+		&i.MagicToken,
+	)
+	return i, err
+}
+
+const getInviteeByToken = `-- name: GetInviteeByToken :one
+SELECT i.id, i.invite_id, i.contact_id, i.state, i.created_at, i.magic_token, inv.title, inv.description as invite_description, inv."from", inv."to"
+FROM invitees i
+JOIN invites inv ON i.invite_id = inv.id
+WHERE i.magic_token = $1
+`
+
+type GetInviteeByTokenRow struct {
+	ID                uuid.UUID      `json:"id"`
+	InviteID          uuid.UUID      `json:"invite_id"`
+	ContactID         uuid.UUID      `json:"contact_id"`
+	State             string         `json:"state"`
+	CreatedAt         time.Time      `json:"created_at"`
+	MagicToken        uuid.UUID      `json:"magic_token"`
+	Title             string         `json:"title"`
+	InviteDescription sql.NullString `json:"invite_description"`
+	From              time.Time      `json:"from"`
+	To                sql.NullTime   `json:"to"`
+}
+
+func (q *Queries) GetInviteeByToken(ctx context.Context, magicToken uuid.UUID) (GetInviteeByTokenRow, error) {
+	row := q.db.QueryRowContext(ctx, getInviteeByToken, magicToken)
+	var i GetInviteeByTokenRow
+	err := row.Scan(
+		&i.ID,
+		&i.InviteID,
+		&i.ContactID,
+		&i.State,
+		&i.CreatedAt,
+		&i.MagicToken,
+		&i.Title,
+		&i.InviteDescription,
+		&i.From,
+		&i.To,
 	)
 	return i, err
 }
 
 const getPendingInvitees = `-- name: GetPendingInvitees :many
-SELECT p.id, p.email, p.name, i.created_at AS invited_at
+SELECT p.id, p.email, p.name, i.created_at AS invited_at, i.magic_token
 FROM invitees i
 JOIN persons p ON i.contact_id = p.id
 WHERE i.invite_id = $1 AND i.state = 'pending'
@@ -446,10 +487,11 @@ ORDER BY i.created_at ASC
 `
 
 type GetPendingInviteesRow struct {
-	ID        uuid.UUID `json:"id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	InvitedAt time.Time `json:"invited_at"`
+	ID         uuid.UUID `json:"id"`
+	Email      string    `json:"email"`
+	Name       string    `json:"name"`
+	InvitedAt  time.Time `json:"invited_at"`
+	MagicToken uuid.UUID `json:"magic_token"`
 }
 
 func (q *Queries) GetPendingInvitees(ctx context.Context, inviteID uuid.UUID) ([]GetPendingInviteesRow, error) {
@@ -466,6 +508,7 @@ func (q *Queries) GetPendingInvitees(ctx context.Context, inviteID uuid.UUID) ([
 			&i.Email,
 			&i.Name,
 			&i.InvitedAt,
+			&i.MagicToken,
 		); err != nil {
 			return nil, err
 		}
@@ -687,6 +730,20 @@ func (q *Queries) ResolveRecipients(ctx context.Context, dollar_1 []uuid.UUID) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const respondToInvite = `-- name: RespondToInvite :exec
+UPDATE invitees SET state = $2 WHERE magic_token = $1
+`
+
+type RespondToInviteParams struct {
+	MagicToken uuid.UUID `json:"magic_token"`
+	State      string    `json:"state"`
+}
+
+func (q *Queries) RespondToInvite(ctx context.Context, arg RespondToInviteParams) error {
+	_, err := q.db.ExecContext(ctx, respondToInvite, arg.MagicToken, arg.State)
+	return err
 }
 
 const updateGroup = `-- name: UpdateGroup :one

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
+const route = useRoute()
 </script>
 
 <template>
   <div class="min-h-full">
-    <nav class="border-b border-gray-200 bg-white dark:border-white/10 dark:bg-gray-900">
+    <nav v-if="route.name !== 'respond'" class="border-b border-gray-200 bg-white dark:border-white/10 dark:bg-gray-900">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="flex h-16 justify-between">
           <div class="flex">
@@ -239,14 +240,16 @@ import { RouterLink, RouterView } from 'vue-router'
       </el-disclosure>
     </nav>
 
-    <div class="py-10 bg-white dark:bg-gray-900 min-h-screen text-gray-900 dark:text-white">
-      <header>
+    <div :class="{'py-10': route.name !== 'respond'}" class="bg-white dark:bg-gray-900 min-h-screen text-gray-900 dark:text-white">
+      <header v-if="route.name !== 'respond'">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h1 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Dashboard</h1>
+          <h1 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+            {{ route.name === 'persons' ? 'Persons' : route.name === 'invites' ? 'Invites' : route.name === 'groups' ? 'Groups' : 'Dashboard' }}
+          </h1>
         </div>
       </header>
       <main>
-        <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div :class="{'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8': route.name !== 'respond'}">
           <RouterView />
         </div>
       </main>

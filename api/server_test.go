@@ -98,7 +98,7 @@ func TestInviteAPI(t *testing.T) {
 
 	// Update Invite
 	newTitle := "Updated Title"
-	newStatus := api.UpdateInviteStatusActive
+	newStatus := api.Active
 	updateRes, err := server.UpdateInvite(ctx, api.UpdateInviteRequestObject{
 		Id: successRes.Id,
 		Body: &api.UpdateInvite{

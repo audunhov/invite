@@ -535,10 +535,11 @@ func (s *Server) GetInviteStatus(ctx context.Context, request GetInviteStatusReq
 	var pending []PendingInvitee
 	for _, pr := range pendingRows {
 		pending = append(pending, PendingInvitee{
-			Id:        pr.ID,
-			Email:     types.Email(pr.Email),
-			Name:      pr.Name,
-			InvitedAt: pr.InvitedAt,
+			Id:         pr.ID,
+			Email:      types.Email(pr.Email),
+			Name:       pr.Name,
+			InvitedAt:  pr.InvitedAt,
+			MagicToken: pr.MagicToken,
 		})
 	}
 
@@ -547,4 +548,46 @@ func (s *Server) GetInviteStatus(ctx context.Context, request GetInviteStatusReq
 	}
 
 	return GetInviteStatus200JSONResponse(resp), nil
+}
+
+func (s *Server) GetInviteForResponse(ctx context.Context, request GetInviteForResponseRequestObject) (GetInviteForResponseResponseObject, error) {
+	invitee, err := s.Queries.GetInviteeByToken(ctx, request.Token)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return GetInviteForResponse404Response{}, nil
+		}
+		return nil, err
+	}
+
+	return GetInviteForResponse200JSONResponse(PublicInviteDetails{
+		InviteId:     invitee.InviteID,
+		Title:        invitee.Title,
+		Description:  toStringPtr(invitee.InviteDescription),
+		From:         invitee.From,
+		To:           toTimePtr(invitee.To),
+		CurrentState: PublicInviteDetailsCurrentState(invitee.State),
+	}), nil
+}
+
+func (s *Server) RespondToInvite(ctx context.Context, request RespondToInviteRequestObject) (RespondToInviteResponseObject, error) {
+	state := "pending"
+	switch request.Body.Action {
+	case Accept:
+		state = "accepted"
+	case Decline:
+		state = "declined"
+	}
+
+	err := s.Queries.RespondToInvite(ctx, db.RespondToInviteParams{
+		MagicToken: request.Token,
+		State:      state,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return RespondToInvite404Response{}, nil
+		}
+		return nil, err
+	}
+
+	return RespondToInvite204Response{}, nil
 }

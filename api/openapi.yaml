@@ -291,6 +291,48 @@ paths:
         '404':
           description: Invite not found
 
+  /respond/{token}:
+    get:
+      summary: Get invite details for response
+      operationId: GetInviteForResponse
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Invite details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicInviteDetails'
+        '404':
+          description: Token not found
+    post:
+      summary: Accept or decline an invite
+      operationId: RespondToInvite
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteResponse'
+      responses:
+        '204':
+          description: Response recorded
+        '404':
+          description: Token not found
+
   /groups:
     get:
       summary: List all groups
@@ -602,7 +644,7 @@ components:
 
     PendingInvitee:
       type: object
-      required: [id, email, name, invited_at]
+      required: [id, email, name, invited_at, magic_token]
       properties:
         id:
           type: string
@@ -615,6 +657,38 @@ components:
         invited_at:
           type: string
           format: date-time
+        magic_token:
+          type: string
+          format: uuid
+
+    PublicInviteDetails:
+      type: object
+      required: [invite_id, title, from, current_state]
+      properties:
+        invite_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        current_state:
+          type: string
+          enum: [pending, accepted, declined, expired]
+
+    InviteResponse:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [accept, decline]
 
     Group:
       type: object
