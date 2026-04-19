@@ -4,13 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
+
+	"invite/db"
 )
 
 type Invite struct {
@@ -32,20 +33,30 @@ type PhaseState struct {
 }
 
 type App struct {
-	DB *sql.Conn
+	Queries *db.Queries
+	DB      *sql.DB
 }
 
-func (app *App) InvitePerson(i Invite, p Person) *Invitee {
-
-	// TODO db
-
-	return &Invitee{
-		ID:        uuid.New(),
+func (app *App) InvitePerson(ctx context.Context, i Invite, p Person) (*Invitee, error) {
+	inviteeID := uuid.New()
+	err := app.Queries.CreateInvitee(ctx, db.CreateInviteeParams{
+		ID:        inviteeID,
 		InviteID:  i.ID,
 		ContactID: p.ID,
-		State:     "pending",
+		State:     string(InviteeStatePending),
 		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		return nil, err
 	}
+
+	return &Invitee{
+		ID:        inviteeID,
+		InviteID:  i.ID,
+		ContactID: p.ID,
+		State:     InviteeStatePending,
+		CreatedAt: time.Now(),
+	}, nil
 }
 
 type Person struct {
@@ -160,15 +171,84 @@ func (ls *LadderStrategy) Kind() StrategyKind {
 }
 
 func (ls *LadderStrategy) Execute(ctx context.Context, invite Invite, phase Phase) error {
-	return errors.New("Not implemented")
+	if len(ls.List) == 0 {
+		return nil
+	}
+
+	_, err := ls.app.InvitePerson(ctx, invite, ls.List[0])
+	if err != nil {
+		return err
+	}
+
+	nextCheckAt := time.Now().Add(ls.Timeout)
+	data, _ := json.Marshal(map[string]int{"index": 0})
+
+	return ls.app.Queries.CreatePhaseState(ctx, db.CreatePhaseStateParams{
+		PhaseID:     phase.ID,
+		Status:      "active",
+		NextCheckAt: sql.NullTime{Time: nextCheckAt, Valid: true},
+		Data:        data,
+	})
 }
 
 func (ls *LadderStrategy) Resume(ctx context.Context, invite Invite, phase Phase, state *PhaseState) error {
-	return nil
+	var data struct{ Index int }
+	if err := json.Unmarshal(state.Data, &data); err != nil {
+		return err
+	}
+
+	nextIndex := data.Index + 1
+	if nextIndex >= len(ls.List) {
+		return ls.app.Queries.UpdatePhaseState(ctx, db.UpdatePhaseStateParams{
+			PhaseID:     phase.ID,
+			Status:      "completed",
+			NextCheckAt: sql.NullTime{Valid: false},
+			Data:        state.Data,
+		})
+	}
+
+	_, err := ls.app.InvitePerson(ctx, invite, ls.List[nextIndex])
+	if err != nil {
+		return err
+	}
+
+	nextCheckAt := time.Now().Add(ls.Timeout)
+	newData, _ := json.Marshal(map[string]int{"index": nextIndex})
+
+	return ls.app.Queries.UpdatePhaseState(ctx, db.UpdatePhaseStateParams{
+		PhaseID:     phase.ID,
+		Status:      "active",
+		NextCheckAt: sql.NullTime{Time: nextCheckAt, Valid: true},
+		Data:        newData,
+	})
 }
 
 func (ls *LadderStrategy) HandleEvent(ctx context.Context, invite Invite, phase Phase, state *PhaseState, event Event) error {
-	return nil
+	if event.Kind != "invitee_declined" {
+		return nil
+	}
+
+	var data struct{ Index int }
+	if err := json.Unmarshal(state.Data, &data); err != nil {
+		return err
+	}
+
+	if data.Index >= len(ls.List) {
+		return nil
+	}
+
+	invitee, err := ls.app.Queries.GetInvitee(ctx, event.InviteeID)
+	if err != nil {
+		return err
+	}
+
+	currentPerson := ls.List[data.Index]
+	if invitee.ContactID != currentPerson.ID {
+		return nil // Not the current person in the ladder
+	}
+
+	// Trigger immediate Resume
+	return ls.Resume(ctx, invite, phase, state)
 }
 
 type SprintStrategy struct {

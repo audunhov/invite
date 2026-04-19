@@ -7,9 +7,156 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const createInvitee = `-- name: CreateInvitee :exec
+INSERT INTO invitees (id, invite_id, contact_id, state, created_at)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type CreateInviteeParams struct {
+	ID        uuid.UUID `json:"id"`
+	InviteID  uuid.UUID `json:"invite_id"`
+	ContactID uuid.UUID `json:"contact_id"`
+	State     string    `json:"state"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) CreateInvitee(ctx context.Context, arg CreateInviteeParams) error {
+	_, err := q.db.ExecContext(ctx, createInvitee,
+		arg.ID,
+		arg.InviteID,
+		arg.ContactID,
+		arg.State,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const createPhaseState = `-- name: CreatePhaseState :exec
+INSERT INTO invite_phase_state (phase_id, status, next_check_at, data)
+VALUES ($1, $2, $3, $4)
+`
+
+type CreatePhaseStateParams struct {
+	PhaseID     uuid.UUID       `json:"phase_id"`
+	Status      string          `json:"status"`
+	NextCheckAt sql.NullTime    `json:"next_check_at"`
+	Data        json.RawMessage `json:"data"`
+}
+
+func (q *Queries) CreatePhaseState(ctx context.Context, arg CreatePhaseStateParams) error {
+	_, err := q.db.ExecContext(ctx, createPhaseState,
+		arg.PhaseID,
+		arg.Status,
+		arg.NextCheckAt,
+		arg.Data,
+	)
+	return err
+}
+
+const getActivePhasesToProcess = `-- name: GetActivePhasesToProcess :many
+SELECT 
+    p.id AS phase_id,
+    p.invite_id,
+    p."order",
+    p.strategy_kind,
+    p.strategy_config,
+    s.status AS phase_status,
+    s.next_check_at,
+    s.data AS phase_data,
+    i.title,
+    i.description,
+    i."from",
+    i."to",
+    i.duration,
+    i.created_at,
+    i.status AS invite_status
+FROM invite_phase_state s
+JOIN invite_phases p ON s.phase_id = p.id
+JOIN invites i ON p.invite_id = i.id
+WHERE s.status = 'active' 
+  AND (s.next_check_at IS NULL OR s.next_check_at <= $1)
+`
+
+type GetActivePhasesToProcessRow struct {
+	PhaseID        uuid.UUID       `json:"phase_id"`
+	InviteID       uuid.UUID       `json:"invite_id"`
+	Order          int32           `json:"order"`
+	StrategyKind   string          `json:"strategy_kind"`
+	StrategyConfig json.RawMessage `json:"strategy_config"`
+	PhaseStatus    string          `json:"phase_status"`
+	NextCheckAt    sql.NullTime    `json:"next_check_at"`
+	PhaseData      json.RawMessage `json:"phase_data"`
+	Title          string          `json:"title"`
+	Description    sql.NullString  `json:"description"`
+	From           time.Time       `json:"from"`
+	To             sql.NullTime    `json:"to"`
+	Duration       sql.NullInt64   `json:"duration"`
+	CreatedAt      time.Time       `json:"created_at"`
+	InviteStatus   string          `json:"invite_status"`
+}
+
+func (q *Queries) GetActivePhasesToProcess(ctx context.Context, nextCheckAt sql.NullTime) ([]GetActivePhasesToProcessRow, error) {
+	rows, err := q.db.QueryContext(ctx, getActivePhasesToProcess, nextCheckAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetActivePhasesToProcessRow
+	for rows.Next() {
+		var i GetActivePhasesToProcessRow
+		if err := rows.Scan(
+			&i.PhaseID,
+			&i.InviteID,
+			&i.Order,
+			&i.StrategyKind,
+			&i.StrategyConfig,
+			&i.PhaseStatus,
+			&i.NextCheckAt,
+			&i.PhaseData,
+			&i.Title,
+			&i.Description,
+			&i.From,
+			&i.To,
+			&i.Duration,
+			&i.CreatedAt,
+			&i.InviteStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getInvitee = `-- name: GetInvitee :one
+SELECT id, invite_id, contact_id, state, created_at FROM invitees WHERE id = $1
+`
+
+func (q *Queries) GetInvitee(ctx context.Context, id uuid.UUID) (Invitee, error) {
+	row := q.db.QueryRowContext(ctx, getInvitee, id)
+	var i Invitee
+	err := row.Scan(
+		&i.ID,
+		&i.InviteID,
+		&i.ContactID,
+		&i.State,
+		&i.CreatedAt,
+	)
+	return i, err
+}
 
 const getPerson = `-- name: GetPerson :one
 SELECT id, email, name FROM persons WHERE id = $1
@@ -20,4 +167,27 @@ func (q *Queries) GetPerson(ctx context.Context, id uuid.UUID) (Person, error) {
 	var i Person
 	err := row.Scan(&i.ID, &i.Email, &i.Name)
 	return i, err
+}
+
+const updatePhaseState = `-- name: UpdatePhaseState :exec
+UPDATE invite_phase_state
+SET status = $2, next_check_at = $3, data = $4
+WHERE phase_id = $1
+`
+
+type UpdatePhaseStateParams struct {
+	PhaseID     uuid.UUID       `json:"phase_id"`
+	Status      string          `json:"status"`
+	NextCheckAt sql.NullTime    `json:"next_check_at"`
+	Data        json.RawMessage `json:"data"`
+}
+
+func (q *Queries) UpdatePhaseState(ctx context.Context, arg UpdatePhaseStateParams) error {
+	_, err := q.db.ExecContext(ctx, updatePhaseState,
+		arg.PhaseID,
+		arg.Status,
+		arg.NextCheckAt,
+		arg.Data,
+	)
+	return err
 }
