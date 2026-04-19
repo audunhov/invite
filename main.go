@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -394,8 +395,15 @@ func main() {
 		log.Fatalf("Error loading swagger spec: %v", err)
 	}
 
-	var handler http.Handler = mux
-	handler = middleware.OapiRequestValidator(swagger)(handler)
+	validator := middleware.OapiRequestValidator(swagger)(mux)
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip validation for Swagger UI and OpenAPI spec
+		if r.URL.Path == "/openapi.json" || strings.HasPrefix(r.URL.Path, "/swagger/") {
+			mux.ServeHTTP(w, r)
+			return
+		}
+		validator.ServeHTTP(w, r)
+	})
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
