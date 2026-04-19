@@ -15,6 +15,83 @@ import (
 	"github.com/lib/pq"
 )
 
+const addGroupMember = `-- name: AddGroupMember :exec
+INSERT INTO group_members (id, contact_id, group_id)
+VALUES ($1, $2, $3)
+`
+
+type AddGroupMemberParams struct {
+	ID        uuid.UUID `json:"id"`
+	ContactID uuid.UUID `json:"contact_id"`
+	GroupID   uuid.UUID `json:"group_id"`
+}
+
+func (q *Queries) AddGroupMember(ctx context.Context, arg AddGroupMemberParams) error {
+	_, err := q.db.ExecContext(ctx, addGroupMember, arg.ID, arg.ContactID, arg.GroupID)
+	return err
+}
+
+const createGroup = `-- name: CreateGroup :one
+INSERT INTO groups (id, name, description)
+VALUES ($1, $2, $3)
+RETURNING id, name, description
+`
+
+type CreateGroupParams struct {
+	ID          uuid.UUID      `json:"id"`
+	Name        string         `json:"name"`
+	Description sql.NullString `json:"description"`
+}
+
+func (q *Queries) CreateGroup(ctx context.Context, arg CreateGroupParams) (Group, error) {
+	row := q.db.QueryRowContext(ctx, createGroup, arg.ID, arg.Name, arg.Description)
+	var i Group
+	err := row.Scan(&i.ID, &i.Name, &i.Description)
+	return i, err
+}
+
+const createInvite = `-- name: CreateInvite :one
+INSERT INTO invites (id, title, description, "from", "to", duration, created_at, status)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, title, description, "from", "to", duration, created_at, status
+`
+
+type CreateInviteParams struct {
+	ID          uuid.UUID      `json:"id"`
+	Title       string         `json:"title"`
+	Description sql.NullString `json:"description"`
+	From        time.Time      `json:"from"`
+	To          sql.NullTime   `json:"to"`
+	Duration    sql.NullInt64  `json:"duration"`
+	CreatedAt   time.Time      `json:"created_at"`
+	Status      string         `json:"status"`
+}
+
+func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) (Invite, error) {
+	row := q.db.QueryRowContext(ctx, createInvite,
+		arg.ID,
+		arg.Title,
+		arg.Description,
+		arg.From,
+		arg.To,
+		arg.Duration,
+		arg.CreatedAt,
+		arg.Status,
+	)
+	var i Invite
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.From,
+		&i.To,
+		&i.Duration,
+		&i.CreatedAt,
+		&i.Status,
+	)
+	return i, err
+}
+
 const createInvitee = `-- name: CreateInvitee :exec
 INSERT INTO invitees (id, invite_id, contact_id, state, created_at)
 VALUES ($1, $2, $3, $4, $5)
@@ -159,6 +236,37 @@ func (q *Queries) GetActivePhasesToProcess(ctx context.Context, nextCheckAt sql.
 	return items, nil
 }
 
+const getGroup = `-- name: GetGroup :one
+SELECT id, name, description FROM groups WHERE id = $1
+`
+
+func (q *Queries) GetGroup(ctx context.Context, id uuid.UUID) (Group, error) {
+	row := q.db.QueryRowContext(ctx, getGroup, id)
+	var i Group
+	err := row.Scan(&i.ID, &i.Name, &i.Description)
+	return i, err
+}
+
+const getInvite = `-- name: GetInvite :one
+SELECT id, title, description, "from", "to", duration, created_at, status FROM invites WHERE id = $1
+`
+
+func (q *Queries) GetInvite(ctx context.Context, id uuid.UUID) (Invite, error) {
+	row := q.db.QueryRowContext(ctx, getInvite, id)
+	var i Invite
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.From,
+		&i.To,
+		&i.Duration,
+		&i.CreatedAt,
+		&i.Status,
+	)
+	return i, err
+}
+
 const getInvitee = `-- name: GetInvitee :one
 SELECT id, invite_id, contact_id, state, created_at FROM invitees WHERE id = $1
 `
@@ -185,6 +293,98 @@ func (q *Queries) GetPerson(ctx context.Context, id uuid.UUID) (Person, error) {
 	var i Person
 	err := row.Scan(&i.ID, &i.Email, &i.Name)
 	return i, err
+}
+
+const listGroupMembers = `-- name: ListGroupMembers :many
+SELECT p.id, p.email, p.name FROM persons p
+JOIN group_members gm ON p.id = gm.contact_id
+WHERE gm.group_id = $1
+`
+
+func (q *Queries) ListGroupMembers(ctx context.Context, groupID uuid.UUID) ([]Person, error) {
+	rows, err := q.db.QueryContext(ctx, listGroupMembers, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Person
+	for rows.Next() {
+		var i Person
+		if err := rows.Scan(&i.ID, &i.Email, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGroups = `-- name: ListGroups :many
+SELECT id, name, description FROM groups
+`
+
+func (q *Queries) ListGroups(ctx context.Context) ([]Group, error) {
+	rows, err := q.db.QueryContext(ctx, listGroups)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Group
+	for rows.Next() {
+		var i Group
+		if err := rows.Scan(&i.ID, &i.Name, &i.Description); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInvites = `-- name: ListInvites :many
+SELECT id, title, description, "from", "to", duration, created_at, status FROM invites
+`
+
+func (q *Queries) ListInvites(ctx context.Context) ([]Invite, error) {
+	rows, err := q.db.QueryContext(ctx, listInvites)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Invite
+	for rows.Next() {
+		var i Invite
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.From,
+			&i.To,
+			&i.Duration,
+			&i.CreatedAt,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listPersons = `-- name: ListPersons :many

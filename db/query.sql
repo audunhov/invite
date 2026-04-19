@@ -7,6 +7,37 @@ INSERT INTO persons (id, email, name) VALUES ($1, $2, $3) RETURNING *;
 -- name: ListPersons :many
 SELECT * FROM persons;
 
+-- name: GetInvite :one
+SELECT * FROM invites WHERE id = $1;
+
+-- name: ListInvites :many
+SELECT * FROM invites;
+
+-- name: CreateInvite :one
+INSERT INTO invites (id, title, description, "from", "to", duration, created_at, status)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING *;
+
+-- name: GetGroup :one
+SELECT * FROM groups WHERE id = $1;
+
+-- name: ListGroups :many
+SELECT * FROM groups;
+
+-- name: CreateGroup :one
+INSERT INTO groups (id, name, description)
+VALUES ($1, $2, $3)
+RETURNING *;
+
+-- name: ListGroupMembers :many
+SELECT p.* FROM persons p
+JOIN group_members gm ON p.id = gm.contact_id
+WHERE gm.group_id = $1;
+
+-- name: AddGroupMember :exec
+INSERT INTO group_members (id, contact_id, group_id)
+VALUES ($1, $2, $3);
+
 -- name: GetActivePhasesToProcess :many
 SELECT 
     p.id AS phase_id,

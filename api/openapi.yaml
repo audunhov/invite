@@ -53,6 +53,147 @@ paths:
         '404':
           description: Not found
 
+  /invites:
+    get:
+      summary: List all invites
+      operationId: ListInvites
+      responses:
+        '200':
+          description: A list of invites
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invite'
+    post:
+      summary: Create a new invite
+      operationId: CreateInvite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewInvite'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invite'
+  /invites/{id}:
+    get:
+      summary: Get an invite by ID
+      operationId: GetInvite
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: An invite
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invite'
+        '404':
+          description: Not found
+
+  /groups:
+    get:
+      summary: List all groups
+      operationId: ListGroups
+      responses:
+        '200':
+          description: A list of groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Group'
+    post:
+      summary: Create a new group
+      operationId: CreateGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewGroup'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+  /groups/{id}:
+    get:
+      summary: Get a group by ID
+      operationId: GetGroup
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: A group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '404':
+          description: Not found
+  /groups/{id}/members:
+    get:
+      summary: List members of a group
+      operationId: ListGroupMembers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: A list of persons in the group
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Person'
+    post:
+      summary: Add a member to a group
+      operationId: AddGroupMember
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddGroupMemberRequest'
+      responses:
+        '204':
+          description: Added
+        '404':
+          description: Group or Person not found
+
 components:
   schemas:
     Person:
@@ -76,3 +217,76 @@ components:
           format: email
         name:
           type: string
+    
+    Invite:
+      type: object
+      required: [id, title, from, created_at, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        duration_ns:
+          type: integer
+          description: Duration in nanoseconds
+        created_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, active, completed, cancelled]
+
+    NewInvite:
+      type: object
+      required: [title, from]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        duration_ns:
+          type: integer
+
+    Group:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+
+    NewGroup:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    AddGroupMemberRequest:
+      type: object
+      required: [person_id]
+      properties:
+        person_id:
+          type: string
+          format: uuid

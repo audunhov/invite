@@ -16,12 +16,81 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/oapi-codegen/runtime"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// Defines values for InviteStatus.
+const (
+	Active    InviteStatus = "active"
+	Cancelled InviteStatus = "cancelled"
+	Completed InviteStatus = "completed"
+	Pending   InviteStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the InviteStatus enum.
+func (e InviteStatus) Valid() bool {
+	switch e {
+	case Active:
+		return true
+	case Cancelled:
+		return true
+	case Completed:
+		return true
+	case Pending:
+		return true
+	default:
+		return false
+	}
+}
+
+// AddGroupMemberRequest defines model for AddGroupMemberRequest.
+type AddGroupMemberRequest struct {
+	PersonId openapi_types.UUID `json:"person_id"`
+}
+
+// Group defines model for Group.
+type Group struct {
+	Description *string            `json:"description,omitempty"`
+	Id          openapi_types.UUID `json:"id"`
+	Name        string             `json:"name"`
+}
+
+// Invite defines model for Invite.
+type Invite struct {
+	CreatedAt   time.Time `json:"created_at"`
+	Description *string   `json:"description,omitempty"`
+
+	// DurationNs Duration in nanoseconds
+	DurationNs *int               `json:"duration_ns,omitempty"`
+	From       time.Time          `json:"from"`
+	Id         openapi_types.UUID `json:"id"`
+	Status     InviteStatus       `json:"status"`
+	Title      string             `json:"title"`
+	To         *time.Time         `json:"to,omitempty"`
+}
+
+// InviteStatus defines model for Invite.Status.
+type InviteStatus string
+
+// NewGroup defines model for NewGroup.
+type NewGroup struct {
+	Description *string `json:"description,omitempty"`
+	Name        string  `json:"name"`
+}
+
+// NewInvite defines model for NewInvite.
+type NewInvite struct {
+	Description *string    `json:"description,omitempty"`
+	DurationNs  *int       `json:"duration_ns,omitempty"`
+	From        time.Time  `json:"from"`
+	Title       string     `json:"title"`
+	To          *time.Time `json:"to,omitempty"`
+}
 
 // NewPerson defines model for NewPerson.
 type NewPerson struct {
@@ -36,11 +105,44 @@ type Person struct {
 	Name  string              `json:"name"`
 }
 
+// CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
+type CreateGroupJSONRequestBody = NewGroup
+
+// AddGroupMemberJSONRequestBody defines body for AddGroupMember for application/json ContentType.
+type AddGroupMemberJSONRequestBody = AddGroupMemberRequest
+
+// CreateInviteJSONRequestBody defines body for CreateInvite for application/json ContentType.
+type CreateInviteJSONRequestBody = NewInvite
+
 // CreatePersonJSONRequestBody defines body for CreatePerson for application/json ContentType.
 type CreatePersonJSONRequestBody = NewPerson
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// List all groups
+	// (GET /groups)
+	ListGroups(w http.ResponseWriter, r *http.Request)
+	// Create a new group
+	// (POST /groups)
+	CreateGroup(w http.ResponseWriter, r *http.Request)
+	// Get a group by ID
+	// (GET /groups/{id})
+	GetGroup(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// List members of a group
+	// (GET /groups/{id}/members)
+	ListGroupMembers(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// Add a member to a group
+	// (POST /groups/{id}/members)
+	AddGroupMember(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// List all invites
+	// (GET /invites)
+	ListInvites(w http.ResponseWriter, r *http.Request)
+	// Create a new invite
+	// (POST /invites)
+	CreateInvite(w http.ResponseWriter, r *http.Request)
+	// Get an invite by ID
+	// (GET /invites/{id})
+	GetInvite(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// List all persons
 	// (GET /persons)
 	ListPersons(w http.ResponseWriter, r *http.Request)
@@ -60,6 +162,162 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListGroups operation middleware
+func (siw *ServerInterfaceWrapper) ListGroups(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListGroups(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateGroup operation middleware
+func (siw *ServerInterfaceWrapper) CreateGroup(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateGroup(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetGroup operation middleware
+func (siw *ServerInterfaceWrapper) GetGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetGroup(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListGroupMembers operation middleware
+func (siw *ServerInterfaceWrapper) ListGroupMembers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListGroupMembers(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddGroupMember operation middleware
+func (siw *ServerInterfaceWrapper) AddGroupMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddGroupMember(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListInvites operation middleware
+func (siw *ServerInterfaceWrapper) ListInvites(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInvites(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateInvite operation middleware
+func (siw *ServerInterfaceWrapper) CreateInvite(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateInvite(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetInvite operation middleware
+func (siw *ServerInterfaceWrapper) GetInvite(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetInvite(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListPersons operation middleware
 func (siw *ServerInterfaceWrapper) ListPersons(w http.ResponseWriter, r *http.Request) {
@@ -234,11 +492,177 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc("GET "+options.BaseURL+"/groups", wrapper.ListGroups)
+	m.HandleFunc("POST "+options.BaseURL+"/groups", wrapper.CreateGroup)
+	m.HandleFunc("GET "+options.BaseURL+"/groups/{id}", wrapper.GetGroup)
+	m.HandleFunc("GET "+options.BaseURL+"/groups/{id}/members", wrapper.ListGroupMembers)
+	m.HandleFunc("POST "+options.BaseURL+"/groups/{id}/members", wrapper.AddGroupMember)
+	m.HandleFunc("GET "+options.BaseURL+"/invites", wrapper.ListInvites)
+	m.HandleFunc("POST "+options.BaseURL+"/invites", wrapper.CreateInvite)
+	m.HandleFunc("GET "+options.BaseURL+"/invites/{id}", wrapper.GetInvite)
 	m.HandleFunc("GET "+options.BaseURL+"/persons", wrapper.ListPersons)
 	m.HandleFunc("POST "+options.BaseURL+"/persons", wrapper.CreatePerson)
 	m.HandleFunc("GET "+options.BaseURL+"/persons/{id}", wrapper.GetPerson)
 
 	return m
+}
+
+type ListGroupsRequestObject struct {
+}
+
+type ListGroupsResponseObject interface {
+	VisitListGroupsResponse(w http.ResponseWriter) error
+}
+
+type ListGroups200JSONResponse []Group
+
+func (response ListGroups200JSONResponse) VisitListGroupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateGroupRequestObject struct {
+	Body *CreateGroupJSONRequestBody
+}
+
+type CreateGroupResponseObject interface {
+	VisitCreateGroupResponse(w http.ResponseWriter) error
+}
+
+type CreateGroup201JSONResponse Group
+
+func (response CreateGroup201JSONResponse) VisitCreateGroupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetGroupRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type GetGroupResponseObject interface {
+	VisitGetGroupResponse(w http.ResponseWriter) error
+}
+
+type GetGroup200JSONResponse Group
+
+func (response GetGroup200JSONResponse) VisitGetGroupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetGroup404Response struct {
+}
+
+func (response GetGroup404Response) VisitGetGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type ListGroupMembersRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type ListGroupMembersResponseObject interface {
+	VisitListGroupMembersResponse(w http.ResponseWriter) error
+}
+
+type ListGroupMembers200JSONResponse []Person
+
+func (response ListGroupMembers200JSONResponse) VisitListGroupMembersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AddGroupMemberRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *AddGroupMemberJSONRequestBody
+}
+
+type AddGroupMemberResponseObject interface {
+	VisitAddGroupMemberResponse(w http.ResponseWriter) error
+}
+
+type AddGroupMember204Response struct {
+}
+
+func (response AddGroupMember204Response) VisitAddGroupMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AddGroupMember404Response struct {
+}
+
+func (response AddGroupMember404Response) VisitAddGroupMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type ListInvitesRequestObject struct {
+}
+
+type ListInvitesResponseObject interface {
+	VisitListInvitesResponse(w http.ResponseWriter) error
+}
+
+type ListInvites200JSONResponse []Invite
+
+func (response ListInvites200JSONResponse) VisitListInvitesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateInviteRequestObject struct {
+	Body *CreateInviteJSONRequestBody
+}
+
+type CreateInviteResponseObject interface {
+	VisitCreateInviteResponse(w http.ResponseWriter) error
+}
+
+type CreateInvite201JSONResponse Invite
+
+func (response CreateInvite201JSONResponse) VisitCreateInviteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetInviteRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type GetInviteResponseObject interface {
+	VisitGetInviteResponse(w http.ResponseWriter) error
+}
+
+type GetInvite200JSONResponse Invite
+
+func (response GetInvite200JSONResponse) VisitGetInviteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetInvite404Response struct {
+}
+
+func (response GetInvite404Response) VisitGetInviteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
 }
 
 type ListPersonsRequestObject struct {
@@ -301,6 +725,30 @@ func (response GetPerson404Response) VisitGetPersonResponse(w http.ResponseWrite
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// List all groups
+	// (GET /groups)
+	ListGroups(ctx context.Context, request ListGroupsRequestObject) (ListGroupsResponseObject, error)
+	// Create a new group
+	// (POST /groups)
+	CreateGroup(ctx context.Context, request CreateGroupRequestObject) (CreateGroupResponseObject, error)
+	// Get a group by ID
+	// (GET /groups/{id})
+	GetGroup(ctx context.Context, request GetGroupRequestObject) (GetGroupResponseObject, error)
+	// List members of a group
+	// (GET /groups/{id}/members)
+	ListGroupMembers(ctx context.Context, request ListGroupMembersRequestObject) (ListGroupMembersResponseObject, error)
+	// Add a member to a group
+	// (POST /groups/{id}/members)
+	AddGroupMember(ctx context.Context, request AddGroupMemberRequestObject) (AddGroupMemberResponseObject, error)
+	// List all invites
+	// (GET /invites)
+	ListInvites(ctx context.Context, request ListInvitesRequestObject) (ListInvitesResponseObject, error)
+	// Create a new invite
+	// (POST /invites)
+	CreateInvite(ctx context.Context, request CreateInviteRequestObject) (CreateInviteResponseObject, error)
+	// Get an invite by ID
+	// (GET /invites/{id})
+	GetInvite(ctx context.Context, request GetInviteRequestObject) (GetInviteResponseObject, error)
 	// List all persons
 	// (GET /persons)
 	ListPersons(ctx context.Context, request ListPersonsRequestObject) (ListPersonsResponseObject, error)
@@ -339,6 +787,227 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListGroups operation middleware
+func (sh *strictHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
+	var request ListGroupsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListGroups(ctx, request.(ListGroupsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListGroups")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListGroupsResponseObject); ok {
+		if err := validResponse.VisitListGroupsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateGroup operation middleware
+func (sh *strictHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
+	var request CreateGroupRequestObject
+
+	var body CreateGroupJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateGroup(ctx, request.(CreateGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateGroupResponseObject); ok {
+		if err := validResponse.VisitCreateGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetGroup operation middleware
+func (sh *strictHandler) GetGroup(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request GetGroupRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetGroup(ctx, request.(GetGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetGroupResponseObject); ok {
+		if err := validResponse.VisitGetGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListGroupMembers operation middleware
+func (sh *strictHandler) ListGroupMembers(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request ListGroupMembersRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListGroupMembers(ctx, request.(ListGroupMembersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListGroupMembers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListGroupMembersResponseObject); ok {
+		if err := validResponse.VisitListGroupMembersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddGroupMember operation middleware
+func (sh *strictHandler) AddGroupMember(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request AddGroupMemberRequestObject
+
+	request.Id = id
+
+	var body AddGroupMemberJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddGroupMember(ctx, request.(AddGroupMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddGroupMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddGroupMemberResponseObject); ok {
+		if err := validResponse.VisitAddGroupMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListInvites operation middleware
+func (sh *strictHandler) ListInvites(w http.ResponseWriter, r *http.Request) {
+	var request ListInvitesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListInvites(ctx, request.(ListInvitesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListInvites")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListInvitesResponseObject); ok {
+		if err := validResponse.VisitListInvitesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateInvite operation middleware
+func (sh *strictHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
+	var request CreateInviteRequestObject
+
+	var body CreateInviteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateInvite(ctx, request.(CreateInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateInviteResponseObject); ok {
+		if err := validResponse.VisitCreateInviteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetInvite operation middleware
+func (sh *strictHandler) GetInvite(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request GetInviteRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetInvite(ctx, request.(GetInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetInviteResponseObject); ok {
+		if err := validResponse.VisitGetInviteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListPersons operation middleware
@@ -425,14 +1094,21 @@ func (sh *strictHandler) GetPerson(w http.ResponseWriter, r *http.Request, id op
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/6xTzW7bTAx8lQW/7yhYSpOTbm4LBAaKwPcgh41EJQy0P92lEgiG3r3gai1H7k/QNCfR",
-	"Sw7JGY4P0DjjnUXLEeoDxOYRjU7hDb7sMURn5YcPzmNgwpRCo6mXoHPBaIY6vxTAo0eoIXIg+wBTAVYb",
-	"lMqzxFRAwO8DBWyhvl3gqfpuaePun7BhafMBm1C7qhsGat+/cMK+sbVgyHYudSPuJbezz8SotvsdFPCM",
-	"IZKwgotNtalkuvNotSeo4XJTbS6hAK/5MVEtfdIgxQ/I8hElNJOzuxZq+EaR97lGto3e2TjL9Kmq5NM4",
-	"y2gTVHvfU5PA5VOWdj6+RMRoEvD/gB3U8F95skmZPVLmm0wLcR2CHmfeLcYmkOeZ3lb1FFm5Th05SE0c",
-	"jNFhzJsr3fendAHexV9w/BJQM+bJ80kw8mfXjn/F70+0Tr6f1lfnMOD0k7AXHzb49dS1fjPr9ky1+VVp",
-	"ZfElK5cqjkYpD9ROv3XLNfIio9dBG2QMEerbA5DMFN8dvV3Pfl9LUbyi9ca/arr7Rz++T7btokoBV9WV",
-	"NFoX3DhWnRvsubLXyEpnsLof1e6rtJ9+BAAA//93w2UALQUAAA==",
+	"H4sIAAAAAAAC/9RWTW/jOAz9KwJ3j94mszMn37I7QBFgpyj2OhgUqsW0GtiSRqJbBIX/+0IfdpzETpy0",
+	"DbY3JyJF8vE9Ui9Q6MpohYoc5C/gikesePhcCHFtdW2+YXWP9l/8VaMjf2CsNmhJYjAzaJ1Wd1L4Hytt",
+	"K06QQ11LARnQ2iDk4MhK9QBNk4HFX7W0KCD/3nP90Znq+59YEDQZhOD78QS6wkpDUiv/cydCBpMSyUDx",
+	"Cgf8dzIMvsF0KMOlepKE+ykWFjmhuOO0lYrghH+QrHAon2Nlidpyf3in9lGAr+mQScUUV9phoZVwmzhS",
+	"ET6g9RetrK6mpzURTUec6pAYqrqKvVXCH2bAC5JP/nLPtBIJ/Q0FVwWWJfZbv7mOJJU4CAPpqbkPdTLe",
+	"mzDI+n3qShjq8w0+n0nGaSwbJdgNPo9x7ES+vJYH79CRrWaMVH8bJsR+9VhxWW7Fjf+cLfTWfbQVb5DJ",
+	"20+mI1l7H6lWoUGpgWlmscXtEjJ4QuviBPl0Nb+a++jaoOJGQg6fr+ZXnyEDw+kxlDp78CIInw8YRpsH",
+	"IrBsKSCHf6Sj62jic3VGKxdB+nM+D3NRK0IVPLkxpSyC7+xnAjbuHv8lCavg+LvFFeTw22yzpWZpRc2i",
+	"JJuuam4tX8eit6fjgpXSEdMrlgrwJq6uKm7XKW3Gy7I7zcBoN1Df32FcxLCxGejoLy3WJ9V2qKRu0DTb",
+	"7SZbY7OH6ac3i9sLug1dLFnsIBb/ZZwpfI6oBYPEj9mLFM0oSa6RWgQNt7xCQusg//4C0gf0ZGsJnUeS",
+	"b8OQ9Uo69tr48UoangXZokUkgy/zL/u7+kYTW+la7YJ6jcR49GX3a7b8uofprAovsQkC/JYMPwDGk6Se",
+	"hu9JWo+PS+efRPSIPZruKD+B6l34pnXDE2D7SXwxeN9+0Ay/7SdNnQFKL4TwM2KE8CEQ05bFLjI1IoCF",
+	"EIyndjDSm254Gciwtg5Tf5lsLsHI9Cw7iZFtDSPrpzs+vH9S5HdbQG1ll91A/agnryDZOm+IcnQJdTB+",
+	"6C00DttCdbCcs4ha7/4qShP1oAZvk83/fCuMabA7PqzBFPndNNhWdlkN9qOerEHTOm+IclSDHYwfWoPj",
+	"sC06VM56C0bnToFN818AAAD//zoXsXytEwAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
