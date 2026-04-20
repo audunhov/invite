@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const auth = useAuthStore()
 const loading = ref(false)
 const error = ref<string | null>(null)
 
@@ -15,20 +17,7 @@ async function login() {
   loading.value = true
   error.value = null
   try {
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    })
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new Error('Invalid email or password')
-      }
-      const errData = await response.json().catch(() => ({}))
-      throw new Error(errData.message || 'Login failed')
-    }
-
+    await auth.login(form)
     // Success - redirect to dashboard
     router.push('/')
   } catch (err) {

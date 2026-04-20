@@ -28,6 +28,25 @@ export const useAuthStore = defineStore('auth', () => {
     return isAuthenticated.value
   }
 
+  async function login(credentials: any) {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentials),
+    })
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Invalid email or password')
+      }
+      const errData = await response.json().catch(() => ({}))
+      throw new Error(errData.message || 'Login failed')
+    }
+
+    // Success - update state
+    await checkAuth()
+  }
+
   async function logout() {
     try {
       await fetch('/api/auth/logout', { method: 'POST' })

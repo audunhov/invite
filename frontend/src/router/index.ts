@@ -55,8 +55,8 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
   
-  // Only check auth if we haven't already or if we're going to a protected route
-  if (!auth.isInitialized) {
+  // Only check auth if we haven't already and we're not logged in
+  if (!auth.isAuthenticated && !auth.isInitialized) {
     await auth.checkAuth()
   }
 
