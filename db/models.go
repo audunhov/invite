@@ -12,6 +12,19 @@ import (
 	"github.com/google/uuid"
 )
 
+type EmailLog struct {
+	ID             uuid.UUID      `json:"id"`
+	InviteeID      uuid.NullUUID  `json:"invitee_id"`
+	RecipientEmail string         `json:"recipient_email"`
+	Subject        string         `json:"subject"`
+	Body           string         `json:"body"`
+	Status         string         `json:"status"`
+	ErrorMessage   sql.NullString `json:"error_message"`
+	Attempts       int32          `json:"attempts"`
+	LastAttemptAt  sql.NullTime   `json:"last_attempt_at"`
+	CreatedAt      time.Time      `json:"created_at"`
+}
+
 type Group struct {
 	ID          uuid.UUID      `json:"id"`
 	Name        string         `json:"name"`

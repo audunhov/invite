@@ -224,3 +224,22 @@ DELETE FROM sessions WHERE id = $1;
 
 -- name: CountAdmins :one
 SELECT COUNT(*) FROM persons WHERE password_hash IS NOT NULL;
+
+-- name: CreateEmailLog :one
+INSERT INTO email_logs (id, invitee_id, recipient_email, subject, body, status, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, NOW())
+RETURNING *;
+
+-- name: UpdateEmailLogStatus :exec
+UPDATE email_logs
+SET status = $2, error_message = $3, attempts = attempts + 1, last_attempt_at = NOW()
+WHERE id = $1;
+
+-- name: GetFailedEmails :many
+SELECT * FROM email_logs WHERE status = 'failed' AND attempts < 3;
+
+-- name: GetEmailLogByInvitee :one
+SELECT * FROM email_logs WHERE invitee_id = $1 ORDER BY created_at DESC LIMIT 1;
+
+-- name: GetEmailLog :one
+SELECT * FROM email_logs WHERE id = $1;

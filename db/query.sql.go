@@ -42,6 +42,46 @@ func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const createEmailLog = `-- name: CreateEmailLog :one
+INSERT INTO email_logs (id, invitee_id, recipient_email, subject, body, status, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, NOW())
+RETURNING id, invitee_id, recipient_email, subject, body, status, error_message, attempts, last_attempt_at, created_at
+`
+
+type CreateEmailLogParams struct {
+	ID             uuid.UUID     `json:"id"`
+	InviteeID      uuid.NullUUID `json:"invitee_id"`
+	RecipientEmail string        `json:"recipient_email"`
+	Subject        string        `json:"subject"`
+	Body           string        `json:"body"`
+	Status         string        `json:"status"`
+}
+
+func (q *Queries) CreateEmailLog(ctx context.Context, arg CreateEmailLogParams) (EmailLog, error) {
+	row := q.db.QueryRowContext(ctx, createEmailLog,
+		arg.ID,
+		arg.InviteeID,
+		arg.RecipientEmail,
+		arg.Subject,
+		arg.Body,
+		arg.Status,
+	)
+	var i EmailLog
+	err := row.Scan(
+		&i.ID,
+		&i.InviteeID,
+		&i.RecipientEmail,
+		&i.Subject,
+		&i.Body,
+		&i.Status,
+		&i.ErrorMessage,
+		&i.Attempts,
+		&i.LastAttemptAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createGroup = `-- name: CreateGroup :one
 INSERT INTO groups (id, name, description)
 VALUES ($1, $2, $3)
@@ -428,6 +468,88 @@ func (q *Queries) GetActivePhasesToProcess(ctx context.Context, nextCheckAt sql.
 			&i.CreatedAt,
 			&i.InviteStatus,
 			&i.FromPersonID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getEmailLog = `-- name: GetEmailLog :one
+SELECT id, invitee_id, recipient_email, subject, body, status, error_message, attempts, last_attempt_at, created_at FROM email_logs WHERE id = $1
+`
+
+func (q *Queries) GetEmailLog(ctx context.Context, id uuid.UUID) (EmailLog, error) {
+	row := q.db.QueryRowContext(ctx, getEmailLog, id)
+	var i EmailLog
+	err := row.Scan(
+		&i.ID,
+		&i.InviteeID,
+		&i.RecipientEmail,
+		&i.Subject,
+		&i.Body,
+		&i.Status,
+		&i.ErrorMessage,
+		&i.Attempts,
+		&i.LastAttemptAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getEmailLogByInvitee = `-- name: GetEmailLogByInvitee :one
+SELECT id, invitee_id, recipient_email, subject, body, status, error_message, attempts, last_attempt_at, created_at FROM email_logs WHERE invitee_id = $1 ORDER BY created_at DESC LIMIT 1
+`
+
+func (q *Queries) GetEmailLogByInvitee(ctx context.Context, inviteeID uuid.NullUUID) (EmailLog, error) {
+	row := q.db.QueryRowContext(ctx, getEmailLogByInvitee, inviteeID)
+	var i EmailLog
+	err := row.Scan(
+		&i.ID,
+		&i.InviteeID,
+		&i.RecipientEmail,
+		&i.Subject,
+		&i.Body,
+		&i.Status,
+		&i.ErrorMessage,
+		&i.Attempts,
+		&i.LastAttemptAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getFailedEmails = `-- name: GetFailedEmails :many
+SELECT id, invitee_id, recipient_email, subject, body, status, error_message, attempts, last_attempt_at, created_at FROM email_logs WHERE status = 'failed' AND attempts < 3
+`
+
+func (q *Queries) GetFailedEmails(ctx context.Context) ([]EmailLog, error) {
+	rows, err := q.db.QueryContext(ctx, getFailedEmails)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EmailLog
+	for rows.Next() {
+		var i EmailLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.InviteeID,
+			&i.RecipientEmail,
+			&i.Subject,
+			&i.Body,
+			&i.Status,
+			&i.ErrorMessage,
+			&i.Attempts,
+			&i.LastAttemptAt,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -957,6 +1079,23 @@ type RespondToInviteParams struct {
 
 func (q *Queries) RespondToInvite(ctx context.Context, arg RespondToInviteParams) error {
 	_, err := q.db.ExecContext(ctx, respondToInvite, arg.MagicToken, arg.State)
+	return err
+}
+
+const updateEmailLogStatus = `-- name: UpdateEmailLogStatus :exec
+UPDATE email_logs
+SET status = $2, error_message = $3, attempts = attempts + 1, last_attempt_at = NOW()
+WHERE id = $1
+`
+
+type UpdateEmailLogStatusParams struct {
+	ID           uuid.UUID      `json:"id"`
+	Status       string         `json:"status"`
+	ErrorMessage sql.NullString `json:"error_message"`
+}
+
+func (q *Queries) UpdateEmailLogStatus(ctx context.Context, arg UpdateEmailLogStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateEmailLogStatus, arg.ID, arg.Status, arg.ErrorMessage)
 	return err
 }
 
