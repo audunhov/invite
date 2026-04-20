@@ -147,6 +147,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dashboard/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get dashboard statistics and activity */
+        get: operations["GetDashboardStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/emails/{id}/retry": {
         parameters: {
             query?: never;
@@ -489,6 +506,29 @@ export interface components {
         AddGroupMemberRequest: {
             /** Format: uuid */
             person_id: string;
+        };
+        DashboardStats: {
+            stats: {
+                active_invites?: number;
+                failed_emails?: number;
+                success_rate?: number;
+            };
+            bottlenecks: {
+                /** Format: uuid */
+                invite_id?: string;
+                title?: string;
+                phase_order?: number;
+                strategy_kind?: string;
+                waiting_for?: string;
+                /** Format: date-time */
+                active_since?: string;
+            }[];
+            activity: {
+                /** Format: date-time */
+                timestamp?: string;
+                type?: string;
+                message?: string;
+            }[];
         };
     };
     responses: never;
@@ -897,6 +937,33 @@ export interface operations {
             };
             /** @description Invite not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GetDashboardStats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dashboard statistics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardStats"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

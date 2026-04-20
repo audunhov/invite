@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed } from 'vue'
 import type { components } from '../api-types'
+import { notify } from '../utils/toast'
+import { useConfirm } from '../composables/useConfirm'
+import TableSkeleton from '../components/TableSkeleton.vue'
+import LoadingSpinner from '../components/LoadingSpinner.vue'
 
 type Group = components['schemas']['Group']
 type NewGroup = components['schemas']['NewGroup']
 type UpdateGroup = components['schemas']['UpdateGroup']
 type Person = components['schemas']['Person']
 
+const { confirm } = useConfirm()
 const groups = ref<Group[]>([])
 const persons = ref<Person[]>([]) // For member assignment
 const currentGroupMembers = ref<Person[]>([])
@@ -65,7 +70,7 @@ async function fetchMembers(groupId: string) {
     if (!response.ok) throw new Error('Failed to fetch members')
     currentGroupMembers.value = (await response.json()) || []
   } catch (err) {
-    alert('Error fetching members: ' + err)
+    notify.error(err instanceof Error ? err.message : 'Error fetching members')
   } finally {
     loadingMembers.value = false
   }
@@ -123,21 +128,31 @@ async function saveGroup() {
     if (!response.ok) throw new Error('Failed to save group')
     await fetchData()
     closeModal()
+    notify.success('Group saved successfully')
   } catch (err) {
-    alert(err)
+    notify.error(err instanceof Error ? err.message : 'Failed to save group')
   } finally {
     isSaving.value = false
   }
 }
 
 async function deleteGroup(group: Group) {
-  if (!confirm(`Are you sure you want to delete group "${group.name}"?`)) return
+  const isConfirmed = await confirm({
+    title: 'Delete Group',
+    message: `Are you sure you want to delete group "${group.name}"?`,
+    variant: 'danger',
+    confirmLabel: 'Delete'
+  })
+
+  if (!isConfirmed) return
+
   try {
     const response = await fetch(`/api/groups/${group.id}`, { method: 'DELETE' })
     if (!response.ok) throw new Error('Failed to delete group')
     await fetchData()
+    notify.success('Group deleted')
   } catch (err) {
-    alert(err)
+    notify.error(err instanceof Error ? err.message : 'Failed to delete group')
   }
 }
 
@@ -153,8 +168,9 @@ async function addMember() {
     if (!response.ok) throw new Error('Failed to add member')
     await fetchMembers(selectedGroupId.value)
     memberForm.personId = ''
+    notify.success('Member added')
   } catch (err) {
-    alert(err)
+    notify.error(err instanceof Error ? err.message : 'Failed to add member')
   } finally {
     isAddingMember.value = false
   }
@@ -162,14 +178,25 @@ async function addMember() {
 
 async function removeMember(person: Person) {
   if (!selectedGroupId.value) return
+  
+  const isConfirmed = await confirm({
+    title: 'Remove Member',
+    message: `Are you sure you want to remove ${person.name} from this group?`,
+    variant: 'danger',
+    confirmLabel: 'Remove'
+  })
+
+  if (!isConfirmed) return
+
   try {
     const response = await fetch(`/api/groups/${selectedGroupId.value}/members/${person.id}`, {
       method: 'DELETE',
     })
     if (!response.ok) throw new Error('Failed to remove member')
     await fetchMembers(selectedGroupId.value)
+    notify.success('Member removed')
   } catch (err) {
-    alert(err)
+    notify.error(err instanceof Error ? err.message : 'Failed to remove member')
   }
 }
 
@@ -200,7 +227,7 @@ onMounted(fetchData)
     <div class="mt-8 flow-root">
       <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
         <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-          <div v-if="loading && groups.length === 0" class="text-center py-4 text-gray-500">Loading groups...</div>
+          <TableSkeleton v-if="loading && groups.length === 0" :columns="2" />
           <table v-else class="min-w-full divide-y divide-gray-300 dark:divide-white/10">
             <thead>
               <tr>
@@ -246,7 +273,8 @@ onMounted(fetchData)
               </div>
             </div>
             <div class="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">
-              <button @click="saveGroup" :disabled="isSaving" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50">
+              <button @click="saveGroup" :disabled="isSaving" class="inline-flex w-full justify-center items-center rounded-md bg-indigo-600 px-4 py-2 text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 gap-2">
+                <LoadingSpinner v-if="isSaving" size="sm" />
                 {{ isSaving ? 'Saving...' : 'Save' }}
               </button>
               <button @click="closeModal" class="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-gray-700 dark:bg-gray-700 dark:text-gray-200">Cancel</button>
@@ -283,9 +311,10 @@ onMounted(fetchData)
                 <button 
                   @click="addMember" 
                   :disabled="!memberForm.personId || isAddingMember"
-                  class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+                  class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 gap-2"
                 >
-                  {{ isAddingMember ? '...' : 'Add' }}
+                  <LoadingSpinner v-if="isAddingMember" size="sm" />
+                  {{ isAddingMember ? 'Adding...' : 'Add' }}
                 </button>
               </div>
               <p v-if="availablePersons.length === 0 && !loading" class="mt-2 text-xs text-gray-500 italic">

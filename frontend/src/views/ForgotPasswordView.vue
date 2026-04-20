@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { notify } from '../utils/toast'
 
 const email = ref('')
 const loading = ref(false)
@@ -23,8 +24,10 @@ async function requestReset() {
     }
 
     success.value = true
+    notify.success('Reset link sent')
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'An unexpected error occurred'
+    notify.error(error.value)
   } finally {
     loading.value = false
   }

@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
+import { Toaster } from 'vue-sonner'
+import ConfirmModal from './components/ConfirmModal.vue'
+import { useConfirm } from './composables/useConfirm'
 import { useAuthStore } from './stores/auth'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { state: confirmState, onConfirm, onCancel } = useConfirm()
 
 onMounted(async () => {
   await auth.checkAuth()
@@ -19,6 +23,17 @@ async function handleLogout() {
 
 <template>
   <div class="min-h-full">
+    <Toaster position="top-right" richColors />
+    <ConfirmModal
+      :show="confirmState.isOpen"
+      :title="confirmState.title"
+      :message="confirmState.message"
+      :variant="confirmState.variant"
+      :confirm-label="confirmState.confirmLabel"
+      :cancel-label="confirmState.cancelLabel"
+      @confirm="onConfirm"
+      @cancel="onCancel"
+    />
     <nav v-if="auth.isAuthenticated && !['login', 'forgot-password', 'reset-password', 'respond'].includes(route.name as string)" class="border-b border-gray-200 bg-white dark:border-white/10 dark:bg-gray-900">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="flex h-16 justify-between">

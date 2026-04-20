@@ -2,6 +2,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { notify } from '../utils/toast'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -20,8 +21,10 @@ async function login() {
     await auth.login(form)
     // Success - redirect to dashboard
     router.push('/')
+    notify.success('Signed in successfully')
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'An unexpected error occurred'
+    notify.error(error.value)
   } finally {
     loading.value = false
   }

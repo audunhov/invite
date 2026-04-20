@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { notify } from '../utils/toast'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,12 +19,14 @@ onMounted(() => {
     token.value = t
   } else {
     error.value = 'Invalid or missing reset token.'
+    notify.error(error.value)
   }
 })
 
 async function resetPassword() {
   if (password.value !== confirmPassword.value) {
     error.value = 'Passwords do not match.'
+    notify.error(error.value)
     return
   }
 
@@ -45,11 +48,13 @@ async function resetPassword() {
     }
 
     success.value = true
+    notify.success('Password reset successful')
     setTimeout(() => {
       router.push('/login')
     }, 3000)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'An unexpected error occurred'
+    notify.error(error.value)
   } finally {
     loading.value = false
   }

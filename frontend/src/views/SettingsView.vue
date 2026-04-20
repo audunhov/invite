@@ -2,12 +2,12 @@
 import { ref, reactive } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import type { components } from '../api-types'
+import { notify } from '@/utils/toast'
 
 type UpdatePerson = components['schemas']['UpdatePerson']
 
 const auth = useAuthStore()
 const isSaving = ref(false)
-const message = ref<{ text: string; type: 'success' | 'error' } | null>(null)
 
 const form = reactive({
   password: '',
@@ -16,22 +16,21 @@ const form = reactive({
 
 async function updatePassword() {
   if (!form.password) {
-    message.value = { text: 'Password cannot be empty', type: 'error' }
+    notify.error('Password cannot be empty')
     return
   }
 
   if (form.password !== form.confirmPassword) {
-    message.value = { text: 'Passwords do not match', type: 'error' }
+    notify.error('Passwords do not match')
     return
   }
 
   if (!auth.user?.id) {
-    message.value = { text: 'User session not found', type: 'error' }
+    notify.error('User session not found')
     return
   }
 
   isSaving.value = true
-  message.value = null
   try {
     const body: UpdatePerson = {
       password: form.password,
@@ -47,11 +46,11 @@ async function updatePassword() {
       throw new Error(errData.message || 'Failed to update password')
     }
 
-    message.value = { text: 'Password updated successfully', type: 'success' }
+    notify.success('Password updated successfully')
     form.password = ''
     form.confirmPassword = ''
   } catch (err) {
-    message.value = { text: err instanceof Error ? err.message : 'Failed to update password', type: 'error' }
+    notify.error(err instanceof Error ? err.message : 'Failed to update password')
   } finally {
     isSaving.value = false
   }
@@ -73,10 +72,6 @@ async function updatePassword() {
         <form @submit.prevent="updatePassword">
           <div class="shadow sm:rounded-md sm:overflow-hidden border border-gray-200 dark:border-white/10">
             <div class="px-4 py-5 bg-white dark:bg-gray-800 space-y-6 sm:p-6">
-              <div v-if="message" :class="message.type === 'success' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800' : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'" class="p-4 rounded-md border text-sm">
-                {{ message.text }}
-              </div>
-
               <div class="grid grid-cols-6 gap-6">
                 <div class="col-span-6 sm:col-span-4">
                   <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">New Password</label>

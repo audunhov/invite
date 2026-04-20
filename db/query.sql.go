@@ -398,6 +398,89 @@ func (q *Queries) GetActivePhaseForInvite(ctx context.Context, inviteID uuid.UUI
 	return i, err
 }
 
+const getActivePhases = `-- name: GetActivePhases :many
+SELECT 
+    p.id AS phase_id,
+    p.invite_id,
+    p."order",
+    p.strategy_kind,
+    p.strategy_config,
+    s.status AS phase_status,
+    s.next_check_at,
+    s.data AS phase_data,
+    i.title,
+    i.description,
+    i."from",
+    i."to",
+    i.duration,
+    i.created_at,
+    i.status AS invite_status,
+    i.from_person_id
+FROM invite_phase_state s
+JOIN invite_phases p ON s.phase_id = p.id
+JOIN invites i ON p.invite_id = i.id
+WHERE s.status = 'active'
+`
+
+type GetActivePhasesRow struct {
+	PhaseID        uuid.UUID       `json:"phase_id"`
+	InviteID       uuid.UUID       `json:"invite_id"`
+	Order          int32           `json:"order"`
+	StrategyKind   string          `json:"strategy_kind"`
+	StrategyConfig json.RawMessage `json:"strategy_config"`
+	PhaseStatus    string          `json:"phase_status"`
+	NextCheckAt    sql.NullTime    `json:"next_check_at"`
+	PhaseData      json.RawMessage `json:"phase_data"`
+	Title          string          `json:"title"`
+	Description    sql.NullString  `json:"description"`
+	From           time.Time       `json:"from"`
+	To             sql.NullTime    `json:"to"`
+	Duration       sql.NullInt64   `json:"duration"`
+	CreatedAt      time.Time       `json:"created_at"`
+	InviteStatus   string          `json:"invite_status"`
+	FromPersonID   uuid.NullUUID   `json:"from_person_id"`
+}
+
+func (q *Queries) GetActivePhases(ctx context.Context) ([]GetActivePhasesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getActivePhases)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetActivePhasesRow
+	for rows.Next() {
+		var i GetActivePhasesRow
+		if err := rows.Scan(
+			&i.PhaseID,
+			&i.InviteID,
+			&i.Order,
+			&i.StrategyKind,
+			&i.StrategyConfig,
+			&i.PhaseStatus,
+			&i.NextCheckAt,
+			&i.PhaseData,
+			&i.Title,
+			&i.Description,
+			&i.From,
+			&i.To,
+			&i.Duration,
+			&i.CreatedAt,
+			&i.InviteStatus,
+			&i.FromPersonID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getActivePhasesToProcess = `-- name: GetActivePhasesToProcess :many
 SELECT 
     p.id AS phase_id,

@@ -151,6 +151,29 @@ JOIN invites i ON p.invite_id = i.id
 WHERE s.status = 'active' 
   AND (s.next_check_at IS NULL OR s.next_check_at <= $1);
 
+-- name: GetActivePhases :many
+SELECT 
+    p.id AS phase_id,
+    p.invite_id,
+    p."order",
+    p.strategy_kind,
+    p.strategy_config,
+    s.status AS phase_status,
+    s.next_check_at,
+    s.data AS phase_data,
+    i.title,
+    i.description,
+    i."from",
+    i."to",
+    i.duration,
+    i.created_at,
+    i.status AS invite_status,
+    i.from_person_id
+FROM invite_phase_state s
+JOIN invite_phases p ON s.phase_id = p.id
+JOIN invites i ON p.invite_id = i.id
+WHERE s.status = 'active';
+
 -- name: DeleteInvitePhaseStates :exec
 DELETE FROM invite_phase_state 
 WHERE phase_id IN (SELECT id FROM invite_phases WHERE invite_id = $1);

@@ -67,6 +67,7 @@ func main() {
 		HandleInviteeResponseFunc:  application.HandleInviteeResponse,
 		InvalidateInviteFunc:      application.InvalidateInvite,
 		InvalidatePhaseFunc:       application.InvalidatePhase,
+		GetDashboardStatsFunc:    application.GetDashboardStats,
 		Limiter:                   ipLimiter,
 		EmailService:              emailService,
 	}

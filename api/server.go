@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/oapi-codegen/runtime/types"
 	"invite/db"
 	"invite/email"
@@ -26,6 +27,7 @@ type Server struct {
 	HandleInviteeResponseFunc func(ctx context.Context, token uuid.UUID, state string) error
 	InvalidateInviteFunc      func(ctx context.Context, inviteID uuid.UUID) error
 	InvalidatePhaseFunc       func(ctx context.Context, inviteID uuid.UUID, phaseID uuid.UUID) error
+	GetDashboardStatsFunc    func(ctx context.Context) (*models.DashboardStats, error)
 	Limiter                   *limiter.IPRateLimiter
 	EmailService              *email.Service
 }
@@ -292,6 +294,66 @@ func fromIntPtr(i *int) sql.NullInt64 {
 		return sql.NullInt64{}
 	}
 	return sql.NullInt64{Int64: int64(*i), Valid: true}
+}
+
+func toFloat32Ptr(f float64) *float32 {
+	val := float32(f)
+	return &val
+}
+
+// Dashboard Handlers
+func (s *Server) GetDashboardStats(ctx context.Context, request GetDashboardStatsRequestObject) (GetDashboardStatsResponseObject, error) {
+	if s.GetDashboardStatsFunc == nil {
+		return nil, errors.New("GetDashboardStatsFunc not initialized")
+	}
+
+	stats, err := s.GetDashboardStatsFunc(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := DashboardStats{}
+	
+	// Map Stats
+	resp.Stats.ActiveInvites = &stats.Stats.ActiveInvites
+	resp.Stats.FailedEmails = &stats.Stats.FailedEmails
+	resp.Stats.SuccessRate = toFloat32Ptr(stats.Stats.SuccessRate)
+
+	// Map Bottlenecks
+	resp.Bottlenecks = make([]struct {
+		ActiveSince  *time.Time          "json:\"active_since,omitempty\""
+		InviteId     *openapi_types.UUID "json:\"invite_id,omitempty\""
+		PhaseOrder   *int                "json:\"phase_order,omitempty\""
+		StrategyKind *string             "json:\"strategy_kind,omitempty\""
+		Title        *string             "json:\"title,omitempty\""
+		WaitingFor   *string             "json:\"waiting_for,omitempty\""
+	}, len(stats.Bottlenecks))
+
+	for i, b := range stats.Bottlenecks {
+		b := b
+		resp.Bottlenecks[i].InviteId = &b.InviteID
+		resp.Bottlenecks[i].Title = &b.Title
+		resp.Bottlenecks[i].PhaseOrder = &b.PhaseOrder
+		resp.Bottlenecks[i].StrategyKind = &b.StrategyKind
+		resp.Bottlenecks[i].WaitingFor = &b.WaitingFor
+		resp.Bottlenecks[i].ActiveSince = &b.ActiveSince
+	}
+
+	// Map Activity
+	resp.Activity = make([]struct {
+		Message   *string    "json:\"message,omitempty\""
+		Timestamp *time.Time "json:\"timestamp,omitempty\""
+		Type      *string    "json:\"type,omitempty\""
+	}, len(stats.Activity))
+
+	for i, a := range stats.Activity {
+		a := a
+		resp.Activity[i].Timestamp = &a.Timestamp
+		resp.Activity[i].Type = &a.Type
+		resp.Activity[i].Message = &a.Message
+	}
+
+	return GetDashboardStats200JSONResponse(resp), nil
 }
 
 // Person Handlers

@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
 import type { components } from '../api-types'
+import { notify } from '../utils/toast'
+import { useConfirm } from '../composables/useConfirm'
+import TableSkeleton from '../components/TableSkeleton.vue'
+import LoadingSpinner from '../components/LoadingSpinner.vue'
 
 type Person = components['schemas']['Person']
 type NewPerson = components['schemas']['NewPerson']
 type UpdatePerson = components['schemas']['UpdatePerson']
 
+const { confirm } = useConfirm()
 const persons = ref<Person[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -86,15 +91,23 @@ async function savePerson() {
 
     await fetchPersons()
     closeModal()
+    notify.success('Person saved successfully')
   } catch (err) {
-    alert(err instanceof Error ? err.message : 'Failed to save')
+    notify.error(err instanceof Error ? err.message : 'Failed to save')
   } finally {
     isSaving.value = false
   }
 }
 
 async function deletePerson(person: Person) {
-  if (!confirm(`Are you sure you want to remove ${person.name}?`)) return
+  const isConfirmed = await confirm({
+    title: 'Remove Person',
+    message: `Are you sure you want to remove ${person.name}? This will also remove them from any groups they are in.`,
+    variant: 'danger',
+    confirmLabel: 'Remove'
+  })
+
+  if (!isConfirmed) return
 
   try {
     const response = await fetch(`/api/persons/${person.id}`, {
@@ -102,8 +115,9 @@ async function deletePerson(person: Person) {
     })
     if (!response.ok) throw new Error('Failed to delete person')
     await fetchPersons()
+    notify.success('Person removed')
   } catch (err) {
-    alert(err instanceof Error ? err.message : 'Failed to delete')
+    notify.error(err instanceof Error ? err.message : 'Failed to delete')
   }
 }
 
@@ -135,7 +149,7 @@ onMounted(() => {
     <div class="mt-8 flow-root">
       <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
         <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-          <div v-if="loading && persons.length === 0" class="text-center py-4 text-gray-500">Loading persons...</div>
+          <TableSkeleton v-if="loading && persons.length === 0" :columns="2" />
           <div v-else-if="error" class="text-center py-4 text-red-500">Error: {{ error }}</div>
           <table v-else class="min-w-full divide-y divide-gray-300 dark:divide-white/10">
             <thead>
@@ -231,8 +245,9 @@ onMounted(() => {
                 @click="savePerson"
                 :disabled="isSaving"
                 type="button"
-                class="inline-flex w-full justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:col-start-2 sm:text-sm disabled:opacity-50"
+                class="inline-flex w-full justify-center items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:col-start-2 sm:text-sm disabled:opacity-50 gap-2"
               >
+                <LoadingSpinner v-if="isSaving" size="sm" />
                 {{ isSaving ? 'Saving...' : 'Save' }}
               </button>
               <button
