@@ -279,12 +279,31 @@ func (q *Queries) DeleteInvitePhase(ctx context.Context, arg DeleteInvitePhasePa
 	return err
 }
 
+const deleteInvitePhaseStates = `-- name: DeleteInvitePhaseStates :exec
+DELETE FROM invite_phase_state 
+WHERE phase_id IN (SELECT id FROM invite_phases WHERE invite_id = $1)
+`
+
+func (q *Queries) DeleteInvitePhaseStates(ctx context.Context, inviteID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteInvitePhaseStates, inviteID)
+	return err
+}
+
 const deletePerson = `-- name: DeletePerson :exec
 DELETE FROM persons WHERE id = $1
 `
 
 func (q *Queries) DeletePerson(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, deletePerson, id)
+	return err
+}
+
+const deletePhaseState = `-- name: DeletePhaseState :exec
+DELETE FROM invite_phase_state WHERE phase_id = $1
+`
+
+func (q *Queries) DeletePhaseState(ctx context.Context, phaseID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deletePhaseState, phaseID)
 	return err
 }
 
@@ -593,6 +612,31 @@ func (q *Queries) GetInviteesStatus(ctx context.Context, inviteID uuid.UUID) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const getNextInvitePhase = `-- name: GetNextInvitePhase :one
+SELECT id, invite_id, "order", strategy_kind, strategy_config FROM invite_phases
+WHERE invite_id = $1 AND "order" > $2
+ORDER BY "order" ASC
+LIMIT 1
+`
+
+type GetNextInvitePhaseParams struct {
+	InviteID uuid.UUID `json:"invite_id"`
+	Order    int32     `json:"order"`
+}
+
+func (q *Queries) GetNextInvitePhase(ctx context.Context, arg GetNextInvitePhaseParams) (InvitePhase, error) {
+	row := q.db.QueryRowContext(ctx, getNextInvitePhase, arg.InviteID, arg.Order)
+	var i InvitePhase
+	err := row.Scan(
+		&i.ID,
+		&i.InviteID,
+		&i.Order,
+		&i.StrategyKind,
+		&i.StrategyConfig,
+	)
+	return i, err
 }
 
 const getPerson = `-- name: GetPerson :one

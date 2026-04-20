@@ -38,7 +38,12 @@ func (ls *LadderStrategy) Progress(state *models.PhaseState) string {
 
 func (ls *LadderStrategy) Execute(ctx context.Context, invite models.Invite, phase models.Phase) error {
 	if len(ls.List) == 0 {
-		return nil
+		return ls.Queries.CreatePhaseState(ctx, db.CreatePhaseStateParams{
+			PhaseID:     phase.ID,
+			Status:      "completed",
+			NextCheckAt: sql.NullTime{Valid: false},
+			Data:        json.RawMessage("{}"),
+		})
 	}
 
 	_, err := ls.Inviter.InvitePerson(ctx, invite, ls.List[0])
@@ -65,12 +70,9 @@ func (ls *LadderStrategy) Resume(ctx context.Context, invite models.Invite, phas
 
 	nextIndex := data.Index + 1
 	if nextIndex >= len(ls.List) {
-		return ls.Queries.UpdatePhaseState(ctx, db.UpdatePhaseStateParams{
-			PhaseID:     phase.ID,
-			Status:      "completed",
-			NextCheckAt: sql.NullTime{Valid: false},
-			Data:        state.Data,
-		})
+		state.Status = "completed"
+		state.NextCheckAt = sql.NullTime{Valid: false}
+		return nil
 	}
 
 	_, err := ls.Inviter.InvitePerson(ctx, invite, ls.List[nextIndex])
@@ -81,15 +83,20 @@ func (ls *LadderStrategy) Resume(ctx context.Context, invite models.Invite, phas
 	nextCheckAt := time.Now().Add(ls.Timeout)
 	newData, _ := json.Marshal(map[string]int{"index": nextIndex})
 
-	return ls.Queries.UpdatePhaseState(ctx, db.UpdatePhaseStateParams{
-		PhaseID:     phase.ID,
-		Status:      "active",
-		NextCheckAt: sql.NullTime{Time: nextCheckAt, Valid: true},
-		Data:        newData,
-	})
+	state.Status = "active"
+	state.NextCheckAt = sql.NullTime{Time: nextCheckAt, Valid: true}
+	state.Data = newData
+
+	return nil
 }
 
 func (ls *LadderStrategy) HandleEvent(ctx context.Context, invite models.Invite, phase models.Phase, state *models.PhaseState, event models.Event) error {
+	if event.Kind == "invitee_accepted" {
+		state.Status = "completed"
+		state.NextCheckAt = sql.NullTime{Valid: false}
+		return nil
+	}
+
 	if event.Kind != "invitee_declined" {
 		return nil
 	}

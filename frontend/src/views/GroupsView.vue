@@ -34,7 +34,8 @@ const memberForm = reactive({
 
 // Filter persons who are NOT in the current group
 const availablePersons = computed(() => {
-  const memberIds = new Set(currentGroupMembers.value.map(m => m.id))
+  const members = currentGroupMembers.value || []
+  const memberIds = new Set(members.map(m => m.id))
   return persons.value.filter(p => !memberIds.has(p.id))
 })
 
@@ -62,7 +63,7 @@ async function fetchMembers(groupId: string) {
   try {
     const response = await fetch(`/api/groups/${groupId}/members`)
     if (!response.ok) throw new Error('Failed to fetch members')
-    currentGroupMembers.value = await response.json()
+    currentGroupMembers.value = (await response.json()) || []
   } catch (err) {
     alert('Error fetching members: ' + err)
   } finally {

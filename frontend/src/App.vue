@@ -119,10 +119,10 @@ async function handleLogout() {
                   class="block px-4 py-2 text-sm text-gray-700 focus:bg-gray-100 focus:outline-hidden dark:text-gray-300 dark:focus:bg-white/5"
                   >Your profile</a
                 >
-                <a
-                  href="#"
+                <RouterLink
+                  to="/settings"
                   class="block px-4 py-2 text-sm text-gray-700 focus:bg-gray-100 focus:outline-hidden dark:text-gray-300 dark:focus:bg-white/5"
-                  >Settings</a
+                  >Settings</RouterLink
                 >
                 <button
                   @click="handleLogout"
@@ -243,10 +243,10 @@ async function handleLogout() {
               class="block px-4 py-2 text-base font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
               >Your profile</a
             >
-            <a
-              href="#"
+            <RouterLink
+              to="/settings"
               class="block px-4 py-2 text-base font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
-              >Settings</a
+              >Settings</RouterLink
             >
             <button
               @click="handleLogout"

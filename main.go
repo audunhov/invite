@@ -61,11 +61,14 @@ func main() {
 	// 4. Initialize API server
 	ipLimiter := limiter.NewIPRateLimiter(rate.Every(time.Second), 5)
 	server := &api.Server{
-		Queries:         queries,
-		StartInviteFunc: application.StartInviteProcess,
-		GetProgressFunc: application.GetPhaseProgress,
-		Limiter:         ipLimiter,
-		EmailService:    emailService,
+		Queries:                   queries,
+		StartInviteFunc:           application.StartInviteProcess,
+		GetProgressFunc:           application.GetPhaseProgress,
+		HandleInviteeResponseFunc:  application.HandleInviteeResponse,
+		InvalidateInviteFunc:      application.InvalidateInvite,
+		InvalidatePhaseFunc:       application.InvalidatePhase,
+		Limiter:                   ipLimiter,
+		EmailService:              emailService,
 	}
 	strictHandler := api.NewStrictHandler(server, nil)
 

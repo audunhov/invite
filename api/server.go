@@ -20,11 +20,14 @@ import (
 )
 
 type Server struct {
-	Queries         *db.Queries
-	StartInviteFunc func(ctx context.Context, inviteID uuid.UUID) error
-	GetProgressFunc func(ctx context.Context, row db.GetActivePhaseForInviteRow) (string, error)
-	Limiter         *limiter.IPRateLimiter
-	EmailService    *email.Service
+	Queries                  *db.Queries
+	StartInviteFunc          func(ctx context.Context, inviteID uuid.UUID) error
+	GetProgressFunc          func(ctx context.Context, row db.GetActivePhaseForInviteRow) (string, error)
+	HandleInviteeResponseFunc func(ctx context.Context, token uuid.UUID, state string) error
+	InvalidateInviteFunc      func(ctx context.Context, inviteID uuid.UUID) error
+	InvalidatePhaseFunc       func(ctx context.Context, inviteID uuid.UUID, phaseID uuid.UUID) error
+	Limiter                   *limiter.IPRateLimiter
+	EmailService              *email.Service
 }
 
 type contextKey string
@@ -471,7 +474,7 @@ func (s *Server) ListGroupMembers(ctx context.Context, request ListGroupMembersR
 		return nil, err
 	}
 
-	var res []Person
+	res := []Person{}
 	for _, p := range persons {
 		res = append(res, Person{
 			Id:          p.ID,
@@ -633,6 +636,12 @@ func (s *Server) UpdateInvite(ctx context.Context, request UpdateInviteRequestOb
 }
 
 func (s *Server) DeleteInvite(ctx context.Context, request DeleteInviteRequestObject) (DeleteInviteResponseObject, error) {
+	if s.InvalidateInviteFunc != nil {
+		if err := s.InvalidateInviteFunc(ctx, request.Id); err != nil {
+			return nil, err
+		}
+	}
+
 	err := s.Queries.DeleteInvite(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -694,13 +703,20 @@ func (s *Server) CreateInvitePhase(ctx context.Context, request CreateInvitePhas
 }
 
 func (s *Server) DeleteInvitePhase(ctx context.Context, request DeleteInvitePhaseRequestObject) (DeleteInvitePhaseResponseObject, error) {
-	err := s.Queries.DeleteInvitePhase(ctx, db.DeleteInvitePhaseParams{
-		ID:       request.PhaseId,
-		InviteID: request.Id,
-	})
-	if err != nil {
-		return nil, err
+	if s.InvalidatePhaseFunc != nil {
+		if err := s.InvalidatePhaseFunc(ctx, request.Id, request.PhaseId); err != nil {
+			return nil, err
+		}
+	} else {
+		err := s.Queries.DeleteInvitePhase(ctx, db.DeleteInvitePhaseParams{
+			ID:       request.PhaseId,
+			InviteID: request.Id,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	return DeleteInvitePhase204Response{}, nil
 }
 
@@ -812,15 +828,25 @@ func (s *Server) RespondToInvite(ctx context.Context, request RespondToInviteReq
 		state = "declined"
 	}
 
-	err := s.Queries.RespondToInvite(ctx, db.RespondToInviteParams{
-		MagicToken: request.Token,
-		State:      state,
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return RespondToInvite404Response{}, nil
+	if s.HandleInviteeResponseFunc != nil {
+		err := s.HandleInviteeResponseFunc(ctx, request.Token, state)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return RespondToInvite404Response{}, nil
+			}
+			return nil, err
 		}
-		return nil, err
+	} else {
+		err := s.Queries.RespondToInvite(ctx, db.RespondToInviteParams{
+			MagicToken: request.Token,
+			State:      state,
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return RespondToInvite404Response{}, nil
+			}
+			return nil, err
+		}
 	}
 
 	return RespondToInvite204Response{}, nil

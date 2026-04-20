@@ -146,7 +146,11 @@ async function saveInvite() {
 }
 
 async function deleteInvite(invite: Invite) {
-  if (!confirm(`Delete invite "${invite.title}"?`)) return
+  const message = invite.status === 'active'
+    ? `Warning: This invite is currently ACTIVE. Deleting it will stop all pending notifications and invalidate all magic links. Proceed?`
+    : `Delete invite "${invite.title}"?`
+    
+  if (!confirm(message)) return
   try {
     const response = await fetch(`/api/invites/${invite.id}`, { method: 'DELETE' })
     if (!response.ok) throw new Error('Failed to delete')
@@ -219,12 +223,21 @@ async function addPhase() {
 
 async function removePhase(phase: InvitePhase) {
   if (!selectedInviteForPhases.value) return
+  
+  const isActive = selectedInviteForPhases.value.status === 'active'
+  const message = isActive 
+    ? `Warning: This invite is currently ACTIVE. Deleting a phase might cause the process to immediately jump to the next phase or complete. Proceed?`
+    : `Are you sure you want to remove this phase?`
+
+  if (!confirm(message)) return
+
   try {
     const response = await fetch(`/api/invites/${selectedInviteForPhases.value.id}/phases/${phase.id}`, {
       method: 'DELETE'
     })
     if (!response.ok) throw new Error('Failed to remove phase')
     await fetchPhases(selectedInviteForPhases.value.id)
+    await fetchData() // Update invite status in main table
   } catch (err) {
     alert(err)
   }

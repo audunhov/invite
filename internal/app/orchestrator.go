@@ -95,6 +95,15 @@ func (app *App) ProcessActivePhases(ctx context.Context) error {
 				slog.String("phase_id", row.PhaseID.String()),
 				slog.Any("error", err))
 		}
+
+		//    e. If completed, trigger next phase
+		if state.Status == "completed" {
+			if err := app.AdvanceToNextPhase(ctx, invite, phase); err != nil {
+				slog.Error("Failed to advance to next phase",
+					slog.String("invite_id", invite.ID.String()),
+					slog.Any("error", err))
+			}
+		}
 	}
 
 	return nil

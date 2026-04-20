@@ -38,6 +38,15 @@ func (ls *SprintStrategy) Execute(ctx context.Context, invite models.Invite, pha
 		return err
 	}
 
+	if len(persons) == 0 {
+		return ls.Queries.CreatePhaseState(ctx, db.CreatePhaseStateParams{
+			PhaseID:     phase.ID,
+			Status:      "completed",
+			NextCheckAt: sql.NullTime{Valid: false},
+			Data:        json.RawMessage("{}"),
+		})
+	}
+
 	g, gCtx := errgroup.WithContext(ctx)
 	jobs := make(chan models.Person, len(persons))
 
@@ -88,16 +97,16 @@ func (ls *SprintStrategy) Execute(ctx context.Context, invite models.Invite, pha
 
 func (ls *SprintStrategy) Resume(ctx context.Context, invite models.Invite, phase models.Phase, state *models.PhaseState) error {
 	if time.Now().After(ls.Deadline) || time.Now().Equal(ls.Deadline) {
-		return ls.Queries.UpdatePhaseState(ctx, db.UpdatePhaseStateParams{
-			PhaseID:     phase.ID,
-			Status:      "completed",
-			NextCheckAt: sql.NullTime{Valid: false},
-			Data:        state.Data,
-		})
+		state.Status = "completed"
+		state.NextCheckAt = sql.NullTime{Valid: false}
 	}
 	return nil
 }
 
 func (ls *SprintStrategy) HandleEvent(ctx context.Context, invite models.Invite, phase models.Phase, state *models.PhaseState, event models.Event) error {
+	if event.Kind == "invitee_accepted" {
+		state.Status = "completed"
+		state.NextCheckAt = sql.NullTime{Valid: false}
+	}
 	return nil
 }

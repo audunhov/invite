@@ -97,6 +97,12 @@ WHERE invite_id = $1
 ORDER BY "order" ASC 
 LIMIT 1;
 
+-- name: GetNextInvitePhase :one
+SELECT * FROM invite_phases
+WHERE invite_id = $1 AND "order" > $2
+ORDER BY "order" ASC
+LIMIT 1;
+
 -- name: GetInvitePhase :one
 SELECT * FROM invite_phases WHERE id = $1;
 
@@ -144,6 +150,13 @@ JOIN invite_phases p ON s.phase_id = p.id
 JOIN invites i ON p.invite_id = i.id
 WHERE s.status = 'active' 
   AND (s.next_check_at IS NULL OR s.next_check_at <= $1);
+
+-- name: DeleteInvitePhaseStates :exec
+DELETE FROM invite_phase_state 
+WHERE phase_id IN (SELECT id FROM invite_phases WHERE invite_id = $1);
+
+-- name: DeletePhaseState :exec
+DELETE FROM invite_phase_state WHERE phase_id = $1;
 
 -- name: UpdatePhaseState :exec
 UPDATE invite_phase_state
