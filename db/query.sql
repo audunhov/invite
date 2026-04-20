@@ -176,3 +176,37 @@ WHERE p.id = ANY($1::uuid[])
 OR p.id IN (
     SELECT contact_id FROM group_members WHERE group_id = ANY($1::uuid[])
 );
+
+-- name: GetPersonByEmail :one
+SELECT * FROM persons WHERE email = $1;
+
+-- name: GetPersonByResetToken :one
+SELECT * FROM persons 
+WHERE password_reset_token = $1 
+  AND password_reset_expires_at > NOW();
+
+-- name: UpdatePersonAuth :one
+UPDATE persons
+SET 
+    password_hash = COALESCE(sqlc.narg('password_hash'), password_hash),
+    password_reset_token = COALESCE(sqlc.narg('password_reset_token'), password_reset_token),
+    password_reset_expires_at = COALESCE(sqlc.narg('password_reset_expires_at'), password_reset_expires_at)
+WHERE id = sqlc.arg('id')
+RETURNING *;
+
+-- name: CreateSession :one
+INSERT INTO sessions (id, person_id, expires_at, created_at)
+VALUES ($1, $2, $3, $4)
+RETURNING *;
+
+-- name: GetSession :one
+SELECT s.*, p.email, p.name, p.password_hash
+FROM sessions s
+JOIN persons p ON s.person_id = p.id
+WHERE s.id = $1 AND s.expires_at > NOW();
+
+-- name: DeleteSession :exec
+DELETE FROM sessions WHERE id = $1;
+
+-- name: CountAdmins :one
+SELECT COUNT(*) FROM persons WHERE password_hash IS NOT NULL;

@@ -31,6 +31,17 @@ func (q *Queries) AddGroupMember(ctx context.Context, arg AddGroupMemberParams) 
 	return err
 }
 
+const countAdmins = `-- name: CountAdmins :one
+SELECT COUNT(*) FROM persons WHERE password_hash IS NOT NULL
+`
+
+func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countAdmins)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createGroup = `-- name: CreateGroup :one
 INSERT INTO groups (id, name, description)
 VALUES ($1, $2, $3)
@@ -155,7 +166,7 @@ func (q *Queries) CreateInvitee(ctx context.Context, arg CreateInviteeParams) er
 }
 
 const createPerson = `-- name: CreatePerson :one
-INSERT INTO persons (id, email, name) VALUES ($1, $2, $3) RETURNING id, email, name
+INSERT INTO persons (id, email, name) VALUES ($1, $2, $3) RETURNING id, email, name, password_hash, password_reset_token, password_reset_expires_at
 `
 
 type CreatePersonParams struct {
@@ -167,7 +178,14 @@ type CreatePersonParams struct {
 func (q *Queries) CreatePerson(ctx context.Context, arg CreatePersonParams) (Person, error) {
 	row := q.db.QueryRowContext(ctx, createPerson, arg.ID, arg.Email, arg.Name)
 	var i Person
-	err := row.Scan(&i.ID, &i.Email, &i.Name)
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.PasswordHash,
+		&i.PasswordResetToken,
+		&i.PasswordResetExpiresAt,
+	)
 	return i, err
 }
 
@@ -191,6 +209,36 @@ func (q *Queries) CreatePhaseState(ctx context.Context, arg CreatePhaseStatePara
 		arg.Data,
 	)
 	return err
+}
+
+const createSession = `-- name: CreateSession :one
+INSERT INTO sessions (id, person_id, expires_at, created_at)
+VALUES ($1, $2, $3, $4)
+RETURNING id, person_id, expires_at, created_at
+`
+
+type CreateSessionParams struct {
+	ID        uuid.UUID `json:"id"`
+	PersonID  uuid.UUID `json:"person_id"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
+	row := q.db.QueryRowContext(ctx, createSession,
+		arg.ID,
+		arg.PersonID,
+		arg.ExpiresAt,
+		arg.CreatedAt,
+	)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.PersonID,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const deleteGroup = `-- name: DeleteGroup :exec
@@ -231,6 +279,15 @@ DELETE FROM persons WHERE id = $1
 
 func (q *Queries) DeletePerson(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, deletePerson, id)
+	return err
+}
+
+const deleteSession = `-- name: DeleteSession :exec
+DELETE FROM sessions WHERE id = $1
+`
+
+func (q *Queries) DeleteSession(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteSession, id)
 	return err
 }
 
@@ -533,18 +590,95 @@ func (q *Queries) GetInviteesStatus(ctx context.Context, inviteID uuid.UUID) ([]
 }
 
 const getPerson = `-- name: GetPerson :one
-SELECT id, email, name FROM persons WHERE id = $1
+SELECT id, email, name, password_hash, password_reset_token, password_reset_expires_at FROM persons WHERE id = $1
 `
 
 func (q *Queries) GetPerson(ctx context.Context, id uuid.UUID) (Person, error) {
 	row := q.db.QueryRowContext(ctx, getPerson, id)
 	var i Person
-	err := row.Scan(&i.ID, &i.Email, &i.Name)
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.PasswordHash,
+		&i.PasswordResetToken,
+		&i.PasswordResetExpiresAt,
+	)
+	return i, err
+}
+
+const getPersonByEmail = `-- name: GetPersonByEmail :one
+SELECT id, email, name, password_hash, password_reset_token, password_reset_expires_at FROM persons WHERE email = $1
+`
+
+func (q *Queries) GetPersonByEmail(ctx context.Context, email string) (Person, error) {
+	row := q.db.QueryRowContext(ctx, getPersonByEmail, email)
+	var i Person
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.PasswordHash,
+		&i.PasswordResetToken,
+		&i.PasswordResetExpiresAt,
+	)
+	return i, err
+}
+
+const getPersonByResetToken = `-- name: GetPersonByResetToken :one
+SELECT id, email, name, password_hash, password_reset_token, password_reset_expires_at FROM persons 
+WHERE password_reset_token = $1 
+  AND password_reset_expires_at > NOW()
+`
+
+func (q *Queries) GetPersonByResetToken(ctx context.Context, passwordResetToken sql.NullString) (Person, error) {
+	row := q.db.QueryRowContext(ctx, getPersonByResetToken, passwordResetToken)
+	var i Person
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.PasswordHash,
+		&i.PasswordResetToken,
+		&i.PasswordResetExpiresAt,
+	)
+	return i, err
+}
+
+const getSession = `-- name: GetSession :one
+SELECT s.id, s.person_id, s.expires_at, s.created_at, p.email, p.name, p.password_hash
+FROM sessions s
+JOIN persons p ON s.person_id = p.id
+WHERE s.id = $1 AND s.expires_at > NOW()
+`
+
+type GetSessionRow struct {
+	ID           uuid.UUID      `json:"id"`
+	PersonID     uuid.UUID      `json:"person_id"`
+	ExpiresAt    time.Time      `json:"expires_at"`
+	CreatedAt    time.Time      `json:"created_at"`
+	Email        string         `json:"email"`
+	Name         string         `json:"name"`
+	PasswordHash sql.NullString `json:"password_hash"`
+}
+
+func (q *Queries) GetSession(ctx context.Context, id uuid.UUID) (GetSessionRow, error) {
+	row := q.db.QueryRowContext(ctx, getSession, id)
+	var i GetSessionRow
+	err := row.Scan(
+		&i.ID,
+		&i.PersonID,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.Email,
+		&i.Name,
+		&i.PasswordHash,
+	)
 	return i, err
 }
 
 const listGroupMembers = `-- name: ListGroupMembers :many
-SELECT p.id, p.email, p.name FROM persons p
+SELECT p.id, p.email, p.name, p.password_hash, p.password_reset_token, p.password_reset_expires_at FROM persons p
 JOIN group_members gm ON p.id = gm.contact_id
 WHERE gm.group_id = $1
 `
@@ -558,7 +692,14 @@ func (q *Queries) ListGroupMembers(ctx context.Context, groupID uuid.UUID) ([]Pe
 	var items []Person
 	for rows.Next() {
 		var i Person
-		if err := rows.Scan(&i.ID, &i.Email, &i.Name); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.PasswordHash,
+			&i.PasswordResetToken,
+			&i.PasswordResetExpiresAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -670,7 +811,7 @@ func (q *Queries) ListInvites(ctx context.Context) ([]Invite, error) {
 }
 
 const listPersons = `-- name: ListPersons :many
-SELECT id, email, name FROM persons
+SELECT id, email, name, password_hash, password_reset_token, password_reset_expires_at FROM persons
 `
 
 func (q *Queries) ListPersons(ctx context.Context) ([]Person, error) {
@@ -682,7 +823,14 @@ func (q *Queries) ListPersons(ctx context.Context) ([]Person, error) {
 	var items []Person
 	for rows.Next() {
 		var i Person
-		if err := rows.Scan(&i.ID, &i.Email, &i.Name); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.PasswordHash,
+			&i.PasswordResetToken,
+			&i.PasswordResetExpiresAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -719,15 +867,21 @@ OR p.id IN (
 )
 `
 
-func (q *Queries) ResolveRecipients(ctx context.Context, dollar_1 []uuid.UUID) ([]Person, error) {
+type ResolveRecipientsRow struct {
+	ID    uuid.UUID `json:"id"`
+	Email string    `json:"email"`
+	Name  string    `json:"name"`
+}
+
+func (q *Queries) ResolveRecipients(ctx context.Context, dollar_1 []uuid.UUID) ([]ResolveRecipientsRow, error) {
 	rows, err := q.db.QueryContext(ctx, resolveRecipients, pq.Array(dollar_1))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Person
+	var items []ResolveRecipientsRow
 	for rows.Next() {
-		var i Person
+		var i ResolveRecipientsRow
 		if err := rows.Scan(&i.ID, &i.Email, &i.Name); err != nil {
 			return nil, err
 		}
@@ -835,7 +989,7 @@ SET
     email = COALESCE($1, email),
     name = COALESCE($2, name)
 WHERE id = $3
-RETURNING id, email, name
+RETURNING id, email, name, password_hash, password_reset_token, password_reset_expires_at
 `
 
 type UpdatePersonParams struct {
@@ -847,7 +1001,50 @@ type UpdatePersonParams struct {
 func (q *Queries) UpdatePerson(ctx context.Context, arg UpdatePersonParams) (Person, error) {
 	row := q.db.QueryRowContext(ctx, updatePerson, arg.Email, arg.Name, arg.ID)
 	var i Person
-	err := row.Scan(&i.ID, &i.Email, &i.Name)
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.PasswordHash,
+		&i.PasswordResetToken,
+		&i.PasswordResetExpiresAt,
+	)
+	return i, err
+}
+
+const updatePersonAuth = `-- name: UpdatePersonAuth :one
+UPDATE persons
+SET 
+    password_hash = COALESCE($1, password_hash),
+    password_reset_token = COALESCE($2, password_reset_token),
+    password_reset_expires_at = COALESCE($3, password_reset_expires_at)
+WHERE id = $4
+RETURNING id, email, name, password_hash, password_reset_token, password_reset_expires_at
+`
+
+type UpdatePersonAuthParams struct {
+	PasswordHash           sql.NullString `json:"password_hash"`
+	PasswordResetToken     sql.NullString `json:"password_reset_token"`
+	PasswordResetExpiresAt sql.NullTime   `json:"password_reset_expires_at"`
+	ID                     uuid.UUID      `json:"id"`
+}
+
+func (q *Queries) UpdatePersonAuth(ctx context.Context, arg UpdatePersonAuthParams) (Person, error) {
+	row := q.db.QueryRowContext(ctx, updatePersonAuth,
+		arg.PasswordHash,
+		arg.PasswordResetToken,
+		arg.PasswordResetExpiresAt,
+		arg.ID,
+	)
+	var i Person
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.PasswordHash,
+		&i.PasswordResetToken,
+		&i.PasswordResetExpiresAt,
+	)
 	return i, err
 }
 

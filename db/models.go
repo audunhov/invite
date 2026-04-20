@@ -61,7 +61,17 @@ type Invitee struct {
 }
 
 type Person struct {
-	ID    uuid.UUID `json:"id"`
-	Email string    `json:"email"`
-	Name  string    `json:"name"`
+	ID                     uuid.UUID      `json:"id"`
+	Email                  string         `json:"email"`
+	Name                   string         `json:"name"`
+	PasswordHash           sql.NullString `json:"password_hash"`
+	PasswordResetToken     sql.NullString `json:"password_reset_token"`
+	PasswordResetExpiresAt sql.NullTime   `json:"password_reset_expires_at"`
+}
+
+type Session struct {
+	ID        uuid.UUID `json:"id"`
+	PersonID  uuid.UUID `json:"person_id"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
 }
