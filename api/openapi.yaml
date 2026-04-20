@@ -520,7 +520,7 @@ components:
     
     Invite:
       type: object
-      required: [id, title, from, created_at, status]
+      required: [id, title, from, created_at, status, from_person_id]
       properties:
         id:
           type: string
@@ -544,10 +544,13 @@ components:
         status:
           type: string
           enum: [pending, active, completed, cancelled]
+        from_person_id:
+          type: string
+          format: uuid
 
     NewInvite:
       type: object
-      required: [title, from]
+      required: [title, from, from_person_id]
       properties:
         title:
           type: string
@@ -561,6 +564,9 @@ components:
           format: date-time
         duration_ns:
           type: integer
+        from_person_id:
+          type: string
+          format: uuid
 
     UpdateInvite:
       type: object
@@ -580,6 +586,9 @@ components:
         status:
           type: string
           enum: [pending, active, completed, cancelled]
+        from_person_id:
+          type: string
+          format: uuid
 
     InvitePhase:
       type: object

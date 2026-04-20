@@ -51,20 +51,21 @@ func (q *Queries) CreateGroup(ctx context.Context, arg CreateGroupParams) (Group
 }
 
 const createInvite = `-- name: CreateInvite :one
-INSERT INTO invites (id, title, description, "from", "to", duration, created_at, status)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, title, description, "from", "to", duration, created_at, status
+INSERT INTO invites (id, title, description, "from", "to", duration, created_at, status, from_person_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, title, description, "from", "to", duration, created_at, status, from_person_id
 `
 
 type CreateInviteParams struct {
-	ID          uuid.UUID      `json:"id"`
-	Title       string         `json:"title"`
-	Description sql.NullString `json:"description"`
-	From        time.Time      `json:"from"`
-	To          sql.NullTime   `json:"to"`
-	Duration    sql.NullInt64  `json:"duration"`
-	CreatedAt   time.Time      `json:"created_at"`
-	Status      string         `json:"status"`
+	ID           uuid.UUID      `json:"id"`
+	Title        string         `json:"title"`
+	Description  sql.NullString `json:"description"`
+	From         time.Time      `json:"from"`
+	To           sql.NullTime   `json:"to"`
+	Duration     sql.NullInt64  `json:"duration"`
+	CreatedAt    time.Time      `json:"created_at"`
+	Status       string         `json:"status"`
+	FromPersonID uuid.NullUUID  `json:"from_person_id"`
 }
 
 func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) (Invite, error) {
@@ -77,6 +78,7 @@ func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) (Inv
 		arg.Duration,
 		arg.CreatedAt,
 		arg.Status,
+		arg.FromPersonID,
 	)
 	var i Invite
 	err := row.Scan(
@@ -88,6 +90,7 @@ func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) (Inv
 		&i.Duration,
 		&i.CreatedAt,
 		&i.Status,
+		&i.FromPersonID,
 	)
 	return i, err
 }
@@ -289,7 +292,8 @@ SELECT
     i."to",
     i.duration,
     i.created_at,
-    i.status AS invite_status
+    i.status AS invite_status,
+    i.from_person_id
 FROM invite_phase_state s
 JOIN invite_phases p ON s.phase_id = p.id
 JOIN invites i ON p.invite_id = i.id
@@ -313,6 +317,7 @@ type GetActivePhasesToProcessRow struct {
 	Duration       sql.NullInt64   `json:"duration"`
 	CreatedAt      time.Time       `json:"created_at"`
 	InviteStatus   string          `json:"invite_status"`
+	FromPersonID   uuid.NullUUID   `json:"from_person_id"`
 }
 
 func (q *Queries) GetActivePhasesToProcess(ctx context.Context, nextCheckAt sql.NullTime) ([]GetActivePhasesToProcessRow, error) {
@@ -340,6 +345,7 @@ func (q *Queries) GetActivePhasesToProcess(ctx context.Context, nextCheckAt sql.
 			&i.Duration,
 			&i.CreatedAt,
 			&i.InviteStatus,
+			&i.FromPersonID,
 		); err != nil {
 			return nil, err
 		}
@@ -386,7 +392,7 @@ func (q *Queries) GetGroup(ctx context.Context, id uuid.UUID) (Group, error) {
 }
 
 const getInvite = `-- name: GetInvite :one
-SELECT id, title, description, "from", "to", duration, created_at, status FROM invites WHERE id = $1
+SELECT id, title, description, "from", "to", duration, created_at, status, from_person_id FROM invites WHERE id = $1
 `
 
 func (q *Queries) GetInvite(ctx context.Context, id uuid.UUID) (Invite, error) {
@@ -401,6 +407,7 @@ func (q *Queries) GetInvite(ctx context.Context, id uuid.UUID) (Invite, error) {
 		&i.Duration,
 		&i.CreatedAt,
 		&i.Status,
+		&i.FromPersonID,
 	)
 	return i, err
 }
@@ -626,7 +633,7 @@ func (q *Queries) ListInvitePhases(ctx context.Context, inviteID uuid.UUID) ([]I
 }
 
 const listInvites = `-- name: ListInvites :many
-SELECT id, title, description, "from", "to", duration, created_at, status FROM invites
+SELECT id, title, description, "from", "to", duration, created_at, status, from_person_id FROM invites
 `
 
 func (q *Queries) ListInvites(ctx context.Context) ([]Invite, error) {
@@ -647,6 +654,7 @@ func (q *Queries) ListInvites(ctx context.Context) ([]Invite, error) {
 			&i.Duration,
 			&i.CreatedAt,
 			&i.Status,
+			&i.FromPersonID,
 		); err != nil {
 			return nil, err
 		}
@@ -778,19 +786,21 @@ SET
     "from" = COALESCE($3, "from"),
     "to" = COALESCE($4, "to"),
     duration = COALESCE($5, duration),
-    status = COALESCE($6, status)
-WHERE id = $7
-RETURNING id, title, description, "from", "to", duration, created_at, status
+    status = COALESCE($6, status),
+    from_person_id = COALESCE($7, from_person_id)
+WHERE id = $8
+RETURNING id, title, description, "from", "to", duration, created_at, status, from_person_id
 `
 
 type UpdateInviteParams struct {
-	Title       sql.NullString `json:"title"`
-	Description sql.NullString `json:"description"`
-	From        sql.NullTime   `json:"from"`
-	To          sql.NullTime   `json:"to"`
-	Duration    sql.NullInt64  `json:"duration"`
-	Status      sql.NullString `json:"status"`
-	ID          uuid.UUID      `json:"id"`
+	Title        sql.NullString `json:"title"`
+	Description  sql.NullString `json:"description"`
+	From         sql.NullTime   `json:"from"`
+	To           sql.NullTime   `json:"to"`
+	Duration     sql.NullInt64  `json:"duration"`
+	Status       sql.NullString `json:"status"`
+	FromPersonID uuid.NullUUID  `json:"from_person_id"`
+	ID           uuid.UUID      `json:"id"`
 }
 
 func (q *Queries) UpdateInvite(ctx context.Context, arg UpdateInviteParams) (Invite, error) {
@@ -801,6 +811,7 @@ func (q *Queries) UpdateInvite(ctx context.Context, arg UpdateInviteParams) (Inv
 		arg.To,
 		arg.Duration,
 		arg.Status,
+		arg.FromPersonID,
 		arg.ID,
 	)
 	var i Invite
@@ -813,6 +824,7 @@ func (q *Queries) UpdateInvite(ctx context.Context, arg UpdateInviteParams) (Inv
 		&i.Duration,
 		&i.CreatedAt,
 		&i.Status,
+		&i.FromPersonID,
 	)
 	return i, err
 }

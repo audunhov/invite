@@ -45,6 +45,7 @@ func (app *App) ProcessActivePhases(ctx context.Context) error {
 			Duration:    time.Duration(row.Duration.Int64),
 			CreatedAt:   row.CreatedAt,
 			Status:      row.InviteStatus,
+			FromPersonID: row.FromPersonID.UUID,
 		}
 
 		phase := Phase{

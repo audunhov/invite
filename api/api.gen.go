@@ -192,12 +192,13 @@ type Invite struct {
 	Description *string   `json:"description,omitempty"`
 
 	// DurationNs Duration in nanoseconds
-	DurationNs *int               `json:"duration_ns,omitempty"`
-	From       time.Time          `json:"from"`
-	Id         openapi_types.UUID `json:"id"`
-	Status     InviteStatus       `json:"status"`
-	Title      string             `json:"title"`
-	To         *time.Time         `json:"to,omitempty"`
+	DurationNs   *int               `json:"duration_ns,omitempty"`
+	From         time.Time          `json:"from"`
+	FromPersonId openapi_types.UUID `json:"from_person_id"`
+	Id           openapi_types.UUID `json:"id"`
+	Status       InviteStatus       `json:"status"`
+	Title        string             `json:"title"`
+	To           *time.Time         `json:"to,omitempty"`
 }
 
 // InviteStatus defines model for Invite.Status.
@@ -262,11 +263,12 @@ type NewGroup struct {
 
 // NewInvite defines model for NewInvite.
 type NewInvite struct {
-	Description *string    `json:"description,omitempty"`
-	DurationNs  *int       `json:"duration_ns,omitempty"`
-	From        time.Time  `json:"from"`
-	Title       string     `json:"title"`
-	To          *time.Time `json:"to,omitempty"`
+	Description  *string            `json:"description,omitempty"`
+	DurationNs   *int               `json:"duration_ns,omitempty"`
+	From         time.Time          `json:"from"`
+	FromPersonId openapi_types.UUID `json:"from_person_id"`
+	Title        string             `json:"title"`
+	To           *time.Time         `json:"to,omitempty"`
 }
 
 // NewInvitePhase defines model for NewInvitePhase.
@@ -313,12 +315,13 @@ type UpdateGroup struct {
 
 // UpdateInvite defines model for UpdateInvite.
 type UpdateInvite struct {
-	Description *string             `json:"description,omitempty"`
-	DurationNs  *int                `json:"duration_ns,omitempty"`
-	From        *time.Time          `json:"from,omitempty"`
-	Status      *UpdateInviteStatus `json:"status,omitempty"`
-	Title       *string             `json:"title,omitempty"`
-	To          *time.Time          `json:"to,omitempty"`
+	Description  *string             `json:"description,omitempty"`
+	DurationNs   *int                `json:"duration_ns,omitempty"`
+	From         *time.Time          `json:"from,omitempty"`
+	FromPersonId *openapi_types.UUID `json:"from_person_id,omitempty"`
+	Status       *UpdateInviteStatus `json:"status,omitempty"`
+	Title        *string             `json:"title,omitempty"`
+	To           *time.Time          `json:"to,omitempty"`
 }
 
 // UpdateInviteStatus defines model for UpdateInvite.Status.
@@ -2543,35 +2546,35 @@ func (sh *strictHandler) RespondToInvite(w http.ResponseWriter, r *http.Request,
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"yfDmy+b/AAAA//8FxXb+oDIAAA==",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

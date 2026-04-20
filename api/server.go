@@ -291,14 +291,15 @@ func (s *Server) ListInvites(ctx context.Context, request ListInvitesRequestObje
 	res := []Invite{}
 	for _, i := range invites {
 		res = append(res, Invite{
-			Id:          i.ID,
-			Title:       i.Title,
-			Description: toStringPtr(i.Description),
-			From:        i.From,
-			To:          toTimePtr(i.To),
-			DurationNs:  toIntPtr(i.Duration),
-			CreatedAt:   i.CreatedAt,
-			Status:      InviteStatus(i.Status),
+			Id:           i.ID,
+			Title:        i.Title,
+			Description:  toStringPtr(i.Description),
+			From:         i.From,
+			To:           toTimePtr(i.To),
+			DurationNs:   toIntPtr(i.Duration),
+			CreatedAt:    i.CreatedAt,
+			Status:       InviteStatus(i.Status),
+			FromPersonId: i.FromPersonID.UUID,
 		})
 	}
 
@@ -307,28 +308,30 @@ func (s *Server) ListInvites(ctx context.Context, request ListInvitesRequestObje
 
 func (s *Server) CreateInvite(ctx context.Context, request CreateInviteRequestObject) (CreateInviteResponseObject, error) {
 	i, err := s.Queries.CreateInvite(ctx, db.CreateInviteParams{
-		ID:          uuid.New(),
-		Title:       request.Body.Title,
-		Description: fromStringPtr(request.Body.Description),
-		From:        request.Body.From,
-		To:          fromTimePtr(request.Body.To),
-		Duration:    fromIntPtr(request.Body.DurationNs),
-		CreatedAt:   time.Now(),
-		Status:      "pending",
+		ID:           uuid.New(),
+		Title:        request.Body.Title,
+		Description:  fromStringPtr(request.Body.Description),
+		From:         request.Body.From,
+		To:           fromTimePtr(request.Body.To),
+		Duration:     fromIntPtr(request.Body.DurationNs),
+		CreatedAt:    time.Now(),
+		Status:       "pending",
+		FromPersonID: uuid.NullUUID{UUID: request.Body.FromPersonId, Valid: true},
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return CreateInvite201JSONResponse(Invite{
-		Id:          i.ID,
-		Title:       i.Title,
-		Description: toStringPtr(i.Description),
-		From:        i.From,
-		To:          toTimePtr(i.To),
-		DurationNs:  toIntPtr(i.Duration),
-		CreatedAt:   i.CreatedAt,
-		Status:      InviteStatus(i.Status),
+		Id:           i.ID,
+		Title:        i.Title,
+		Description:  toStringPtr(i.Description),
+		From:         i.From,
+		To:           toTimePtr(i.To),
+		DurationNs:   toIntPtr(i.Duration),
+		CreatedAt:    i.CreatedAt,
+		Status:       InviteStatus(i.Status),
+		FromPersonId: i.FromPersonID.UUID,
 	}), nil
 }
 
@@ -342,14 +345,15 @@ func (s *Server) GetInvite(ctx context.Context, request GetInviteRequestObject) 
 	}
 
 	return GetInvite200JSONResponse(Invite{
-		Id:          i.ID,
-		Title:       i.Title,
-		Description: toStringPtr(i.Description),
-		From:        i.From,
-		To:          toTimePtr(i.To),
-		DurationNs:  toIntPtr(i.Duration),
-		CreatedAt:   i.CreatedAt,
-		Status:      InviteStatus(i.Status),
+		Id:           i.ID,
+		Title:        i.Title,
+		Description:  toStringPtr(i.Description),
+		From:         i.From,
+		To:           toTimePtr(i.To),
+		DurationNs:   toIntPtr(i.Duration),
+		CreatedAt:    i.CreatedAt,
+		Status:       InviteStatus(i.Status),
+		FromPersonId: i.FromPersonID.UUID,
 	}), nil
 }
 
@@ -375,6 +379,9 @@ func (s *Server) UpdateInvite(ctx context.Context, request UpdateInviteRequestOb
 	if request.Body.Status != nil {
 		params.Status = sql.NullString{String: string(*request.Body.Status), Valid: true}
 	}
+	if request.Body.FromPersonId != nil {
+		params.FromPersonID = uuid.NullUUID{UUID: *request.Body.FromPersonId, Valid: true}
+	}
 
 	i, err := s.Queries.UpdateInvite(ctx, params)
 	if err != nil {
@@ -385,14 +392,15 @@ func (s *Server) UpdateInvite(ctx context.Context, request UpdateInviteRequestOb
 	}
 
 	return UpdateInvite200JSONResponse(Invite{
-		Id:          i.ID,
-		Title:       i.Title,
-		Description: toStringPtr(i.Description),
-		From:        i.From,
-		To:          toTimePtr(i.To),
-		DurationNs:  toIntPtr(i.Duration),
-		CreatedAt:   i.CreatedAt,
-		Status:      InviteStatus(i.Status),
+		Id:           i.ID,
+		Title:        i.Title,
+		Description:  toStringPtr(i.Description),
+		From:         i.From,
+		To:           toTimePtr(i.To),
+		DurationNs:   toIntPtr(i.Duration),
+		CreatedAt:    i.CreatedAt,
+		Status:       InviteStatus(i.Status),
+		FromPersonId: i.FromPersonID.UUID,
 	}), nil
 }
 

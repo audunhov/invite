@@ -23,6 +23,7 @@ import (
 	"invite/api"
 	"invite/config"
 	"invite/db"
+	"invite/email"
 
 	middleware "github.com/oapi-codegen/nethttp-middleware"
 	"github.com/swaggest/swgui/v5emb"
@@ -37,6 +38,7 @@ type Invite struct {
 	Duration    time.Duration
 	CreatedAt   time.Time
 	Status      string // pending, active, completed, cancelled
+	FromPersonID uuid.UUID
 }
 
 type PhaseState struct {
@@ -47,8 +49,9 @@ type PhaseState struct {
 }
 
 type App struct {
-	Queries *db.Queries
-	DB      *sql.DB
+	Queries      *db.Queries
+	DB           *sql.DB
+	EmailService *email.Service
 }
 
 func (app *App) InvitePerson(ctx context.Context, i Invite, p Person) (*Invitee, error) {
@@ -65,6 +68,17 @@ func (app *App) InvitePerson(ctx context.Context, i Invite, p Person) (*Invitee,
 	if err != nil {
 		return nil, err
 	}
+
+	go func() {
+		sender, err := app.Queries.GetPerson(context.Background(), i.FromPersonID)
+		if err == nil {
+			if err := app.EmailService.SendInvite(p, sender, i.Title, i.Description, magicToken.String()); err != nil {
+				slog.Error("Failed to send invite email", slog.Any("error", err), slog.String("invite_id", i.ID.String()), slog.String("recipient", p.Email))
+			}
+		} else {
+			slog.Error("Failed to fetch sender for email", slog.Any("error", err), slog.String("person_id", i.FromPersonID.String()))
+		}
+	}()
 
 	return &Invitee{
 		ID:        inviteeID,
@@ -105,6 +119,7 @@ func (app *App) StartInviteProcess(ctx context.Context, inviteID uuid.UUID) erro
 		Duration:    time.Duration(i.Duration.Int64),
 		CreatedAt:   i.CreatedAt,
 		Status:      i.Status,
+		FromPersonID: i.FromPersonID.UUID,
 	}
 
 	phaseModel := Phase{
@@ -517,8 +532,9 @@ func main() {
 	}
 
 	app := &App{
-		Queries: db.New(dbConn),
-		DB:      dbConn,
+		Queries:      db.New(dbConn),
+		DB:           dbConn,
+		EmailService: email.NewService(cfg),
 	}
 
 	// 4. Initialize API server

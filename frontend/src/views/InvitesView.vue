@@ -26,6 +26,8 @@ const inviteForm = reactive({
   title: '',
   description: '',
   from: new Date(Date.now() + 86400000).toISOString().slice(0, 16), // Tomorrow
+  to: '',
+  from_person_id: '',
 })
 
 // Phases Modal
@@ -95,6 +97,10 @@ function openCreateInviteModal() {
   inviteForm.title = ''
   inviteForm.description = ''
   inviteForm.from = new Date(Date.now() + 86400000).toISOString().slice(0, 16)
+  inviteForm.to = ''
+  // Default to Tom Cook if found
+  const tom = persons.value.find(p => p.email === 'tom@example.com')
+  inviteForm.from_person_id = tom ? tom.id : ''
   isInviteModalOpen.value = true
 }
 
@@ -103,16 +109,22 @@ function openEditInviteModal(invite: Invite) {
   inviteForm.title = invite.title
   inviteForm.description = invite.description || ''
   inviteForm.from = new Date(invite.from).toISOString().slice(0, 16)
+  inviteForm.to = invite.to ? new Date(invite.to).toISOString().slice(0, 16) : ''
+  inviteForm.from_person_id = invite.from_person_id
   isInviteModalOpen.value = true
 }
 
 async function saveInvite() {
   isSavingInvite.value = true
   try {
-    const body = {
+    const body: Record<string, any> = {
       title: inviteForm.title,
       description: inviteForm.description,
       from: new Date(inviteForm.from).toISOString(),
+      from_person_id: inviteForm.from_person_id,
+    }
+    if (inviteForm.to) {
+      body.to = new Date(inviteForm.to).toISOString()
     }
     const method = editingInvite.value ? 'PATCH' : 'POST'
     const url = editingInvite.value ? `/api/invites/${editingInvite.value.id}` : '/api/invites'
@@ -345,8 +357,18 @@ onMounted(fetchData)
                 <textarea v-model="inviteForm.description" rows="2" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border"></textarea>
               </div>
               <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">From</label>
+                <select v-model="inviteForm.from_person_id" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border">
+                  <option v-for="p in persons" :key="p.id" :value="p.id">{{ p.name }} ({{ p.email }})</option>
+                </select>
+              </div>
+              <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Starts At</label>
                 <input v-model="inviteForm.from" type="datetime-local" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Ends At (Optional)</label>
+                <input v-model="inviteForm.to" type="datetime-local" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border" />
               </div>
             </div>
             <div class="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">

@@ -25,8 +25,8 @@ SELECT * FROM invites WHERE id = $1;
 SELECT * FROM invites;
 
 -- name: CreateInvite :one
-INSERT INTO invites (id, title, description, "from", "to", duration, created_at, status)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO invites (id, title, description, "from", "to", duration, created_at, status, from_person_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: UpdateInvite :one
@@ -37,7 +37,8 @@ SET
     "from" = COALESCE(sqlc.narg('from'), "from"),
     "to" = COALESCE(sqlc.narg('to'), "to"),
     duration = COALESCE(sqlc.narg('duration'), duration),
-    status = COALESCE(sqlc.narg('status'), status)
+    status = COALESCE(sqlc.narg('status'), status),
+    from_person_id = COALESCE(sqlc.narg('from_person_id'), from_person_id)
 WHERE id = sqlc.arg('id')
 RETURNING *;
 
@@ -135,7 +136,8 @@ SELECT
     i."to",
     i.duration,
     i.created_at,
-    i.status AS invite_status
+    i.status AS invite_status,
+    i.from_person_id
 FROM invite_phase_state s
 JOIN invite_phases p ON s.phase_id = p.id
 JOIN invites i ON p.invite_id = i.id

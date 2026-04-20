@@ -25,14 +25,15 @@ type GroupMember struct {
 }
 
 type Invite struct {
-	ID          uuid.UUID      `json:"id"`
-	Title       string         `json:"title"`
-	Description sql.NullString `json:"description"`
-	From        time.Time      `json:"from"`
-	To          sql.NullTime   `json:"to"`
-	Duration    sql.NullInt64  `json:"duration"`
-	CreatedAt   time.Time      `json:"created_at"`
-	Status      string         `json:"status"`
+	ID           uuid.UUID      `json:"id"`
+	Title        string         `json:"title"`
+	Description  sql.NullString `json:"description"`
+	From         time.Time      `json:"from"`
+	To           sql.NullTime   `json:"to"`
+	Duration     sql.NullInt64  `json:"duration"`
+	CreatedAt    time.Time      `json:"created_at"`
+	Status       string         `json:"status"`
+	FromPersonID uuid.NullUUID  `json:"from_person_id"`
 }
 
 type InvitePhase struct {
