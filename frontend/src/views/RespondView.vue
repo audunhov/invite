@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import type { components } from '../api-types'
+import { notify } from '../utils/toast'
 
 type PublicInviteDetails = components['schemas']['PublicInviteDetails']
 
@@ -46,8 +47,9 @@ async function respond(action: 'accept' | 'decline') {
     
     responded.value = true
     actionTaken.value = action === 'accept' ? 'accepted' : 'declined'
+    notify.success(`Response recorded: ${action}`)
   } catch (err) {
-    alert(err)
+    notify.error(err instanceof Error ? err.message : 'An unexpected error occurred')
   } finally {
     loading.value = false
   }

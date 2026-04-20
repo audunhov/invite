@@ -13,3 +13,8 @@
     }
   }
 }
+
+/* Ensure vue-sonner toasts are on top */
+[data-sonner-toaster] {
+  z-index: 10000 !important;
+}

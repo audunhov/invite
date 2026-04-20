@@ -22,8 +22,8 @@ async function handleLogout() {
 </script>
 
 <template>
+  <Toaster position="top-right" richColors expand closeButton theme="system" />
   <div class="min-h-full">
-    <Toaster position="top-right" richColors />
     <ConfirmModal
       :show="confirmState.isOpen"
       :title="confirmState.title"
