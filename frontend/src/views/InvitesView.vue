@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed } from 'vue'
 import type { components } from '../api-types'
+import { notify } from '@/utils/toast'
+import { useConfirm } from '@/composables/useConfirm'
+import TableSkeleton from '@/components/TableSkeleton.vue'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
 
 type Invite = components['schemas']['Invite']
 type InvitePhase = components['schemas']['InvitePhase']
@@ -9,11 +13,14 @@ type InviteStatusReport = components['schemas']['InviteStatusReport']
 type Person = components['schemas']['Person']
 type Group = components['schemas']['Group']
 
+const { confirm } = useConfirm()
+
 const invites = ref<Invite[]>([])
 const persons = ref<Person[]>([])
 const groups = ref<Group[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
+const startingInvites = reactive<Record<string, boolean>>({})
 
 // Invite Modal
 const isInviteModalOpen = ref(false)
@@ -77,7 +84,9 @@ function moveRecipient(index: number, direction: number) {
   const newIndex = index + direction
   if (newIndex < 0 || newIndex >= phaseForm.selectedRecipientIds.length) return
   const item = phaseForm.selectedRecipientIds.splice(index, 1)[0]
-  phaseForm.selectedRecipientIds.splice(newIndex, 0, item)
+  if (item) {
+    phaseForm.selectedRecipientIds.splice(newIndex, 0, item)
+  }
 }
 
 function toggleRecipient(id: string) {
@@ -135,8 +144,9 @@ async function saveInvite() {
     if (!response.ok) throw new Error('Failed to save invite')
     await fetchData()
     isInviteModalOpen.value = false
+    notify.success(editingInvite.value ? 'Invite updated' : 'Invite created')
   } catch (err) {
-    alert(err)
+    notify.error(err instanceof Error ? err.message : String(err))
   } finally {
     isSavingInvite.value = false
   }
@@ -147,13 +157,19 @@ async function deleteInvite(invite: Invite) {
     ? `Warning: This invite is currently ACTIVE. Deleting it will stop all pending notifications and invalidate all magic links. Proceed?`
     : `Delete invite "${invite.title}"?`
     
-  if (!confirm(message)) return
+  if (!await confirm({
+    title: 'Delete Invite',
+    message,
+    variant: 'danger',
+    confirmLabel: 'Delete'
+  })) return
   try {
     const response = await fetch(`/api/invites/${invite.id}`, { method: 'DELETE' })
     if (!response.ok) throw new Error('Failed to delete')
     await fetchData()
+    notify.success('Invite deleted')
   } catch (err) {
-    alert(err)
+    notify.error(err instanceof Error ? err.message : String(err))
   }
 }
 
@@ -170,7 +186,7 @@ async function fetchPhases(inviteId: string) {
     phases.value = await response.json()
     phaseForm.order = phases.value.length + 1
   } catch (err) {
-    alert(err)
+    notify.error(err instanceof Error ? err.message : String(err))
   } finally {
     loadingPhases.value = false
   }
@@ -200,7 +216,7 @@ async function addPhase() {
     const body: NewInvitePhase = {
       order: phaseForm.order,
       strategy_kind: phaseForm.strategy_kind,
-      strategy_config: strategy_config
+      strategy_config: strategy_config as any
     }
 
     const response = await fetch(`/api/invites/${selectedInviteForPhases.value.id}/phases`, {
@@ -211,8 +227,9 @@ async function addPhase() {
     if (!response.ok) throw new Error('Failed to add phase')
     await fetchPhases(selectedInviteForPhases.value.id)
     phaseForm.selectedRecipientIds = []
+    notify.success('Phase added')
   } catch (err) {
-    alert(err)
+    notify.error(err instanceof Error ? err.message : String(err))
   } finally {
     isAddingPhase.value = false
   }
@@ -226,7 +243,12 @@ async function removePhase(phase: InvitePhase) {
     ? `Warning: This invite is currently ACTIVE. Deleting a phase might cause the process to immediately jump to the next phase or complete. Proceed?`
     : `Are you sure you want to remove this phase?`
 
-  if (!confirm(message)) return
+  if (!await confirm({
+    title: 'Remove Phase',
+    message,
+    variant: 'danger',
+    confirmLabel: 'Remove'
+  })) return
 
   try {
     const response = await fetch(`/api/invites/${selectedInviteForPhases.value.id}/phases/${phase.id}`, {
@@ -235,22 +257,26 @@ async function removePhase(phase: InvitePhase) {
     if (!response.ok) throw new Error('Failed to remove phase')
     await fetchPhases(selectedInviteForPhases.value.id)
     await fetchData() // Update invite status in main table
+    notify.success('Phase removed')
   } catch (err) {
-    alert(err)
+    notify.error(err instanceof Error ? err.message : String(err))
   }
 }
 
 async function startInvite(invite: Invite) {
+  startingInvites[invite.id] = true
   try {
     const response = await fetch(`/api/invites/${invite.id}/start`, { method: 'POST' })
     if (!response.ok) {
       const err = await response.json()
       throw new Error(err.message || 'Failed to start')
     }
-    alert('Invite process started!')
+    notify.success('Invite process started!')
     await fetchData()
   } catch (err) {
-    alert(err)
+    notify.error(err instanceof Error ? err.message : String(err))
+  } finally {
+    delete startingInvites[invite.id]
   }
 }
 
@@ -262,7 +288,7 @@ async function openStatusModal(invite: Invite) {
     if (!response.ok) throw new Error('Failed to fetch status')
     statusReport.value = await response.json()
   } catch (err) {
-    alert(err)
+    notify.error(err instanceof Error ? err.message : String(err))
     isStatusModalOpen.value = false
   } finally {
     loadingStatus.value = false
@@ -273,7 +299,7 @@ function copyLink(token?: string) {
   if (!token) return
   const url = `${window.location.origin}/respond/${token}`
   navigator.clipboard.writeText(url).then(() => {
-    alert('Link copied to clipboard!')
+    notify.success('Link copied to clipboard!')
   })
 }
 
@@ -303,8 +329,9 @@ async function retryEmail(emailId: string) {
       const res = await fetch(`/api/invites/${inviteId}/status`)
       if (res.ok) statusReport.value = await res.json()
     }
+    notify.success('Email retry queued')
   } catch (err) {
-    alert(err)
+    notify.error(err instanceof Error ? err.message : String(err))
   }
 }
 
@@ -341,7 +368,7 @@ onMounted(fetchData)
     <div class="mt-8 flow-root">
       <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
         <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-          <div v-if="loading && invites.length === 0" class="text-center py-4 text-gray-500">Loading invites...</div>
+          <TableSkeleton v-if="loading && invites.length === 0" :columns="3" />
           <table v-else class="min-w-full divide-y divide-gray-300 dark:divide-white/10">
             <thead>
               <tr>
@@ -366,7 +393,10 @@ onMounted(fetchData)
                 <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">{{ new Date(invite.from).toLocaleString() }}</td>
                 <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0 space-x-3">
                   <button v-if="invite.status !== 'pending'" @click="openStatusModal(invite)" class="text-green-600 hover:text-green-900 dark:text-green-400">Status</button>
-                  <button v-if="invite.status === 'pending'" @click="startInvite(invite)" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 font-bold">Start</button>
+                  <button v-if="invite.status === 'pending'" @click="startInvite(invite)" :disabled="!!startingInvites[invite.id]" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 font-bold inline-flex items-center gap-1">
+                    <LoadingSpinner v-if="startingInvites[invite.id]" size="sm" />
+                    <span>Start</span>
+                  </button>
                   <button @click="openPhasesModal(invite)" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400">Phases</button>
                   <button @click="openEditInviteModal(invite)" class="text-gray-600 hover:text-gray-900 dark:text-gray-400">Edit</button>
                   <button @click="deleteInvite(invite)" class="text-red-600 hover:text-red-900 dark:text-red-400">Delete</button>
@@ -413,7 +443,10 @@ onMounted(fetchData)
               </div>
             </div>
             <div class="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">
-              <button @click="saveInvite" :disabled="isSavingInvite" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-white shadow-sm hover:bg-indigo-700">Save</button>
+              <button @click="saveInvite" :disabled="isSavingInvite" class="inline-flex w-full justify-center items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50">
+                <LoadingSpinner v-if="isSavingInvite" size="sm" />
+                {{ isSavingInvite ? 'Saving...' : 'Save' }}
+              </button>
               <button @click="isInviteModalOpen = false" class="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-gray-700 dark:bg-gray-700 dark:text-gray-200">Cancel</button>
             </div>
           </div>
