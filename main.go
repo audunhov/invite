@@ -149,9 +149,9 @@ func (app *App) GetPhaseProgress(ctx context.Context, row db.GetActivePhaseForIn
 	}
 
 	state := &PhaseState{
-		PhaseID:     row.PhaseID,
-		Status:      row.PhaseStatus,
-		Data:        row.PhaseData,
+		PhaseID: row.PhaseID,
+		Status:  row.PhaseStatus,
+		Data:    row.PhaseData,
 	}
 	if row.NextCheckAt.Valid {
 		state.NextCheckAt = &row.NextCheckAt.Time
@@ -392,10 +392,7 @@ func (ls *SprintStrategy) Execute(ctx context.Context, invite Invite, phase Phas
 	g, gCtx := errgroup.WithContext(ctx)
 	jobs := make(chan Person, len(persons))
 
-	numWorkers := 10
-	if len(persons) < numWorkers {
-		numWorkers = len(persons)
-	}
+	numWorkers := min(len(persons), 10)
 
 	for range numWorkers {
 		g.Go(func() error {
@@ -491,17 +488,27 @@ func main() {
 	defer stop()
 
 	// 3. Initialize Database
-	dbConn, err := sql.Open("postgres", cfg.DatabaseURL)
+	var dbConn *sql.DB
+	maxRetries := 5
+	for i := range maxRetries {
+		dbConn, err = sql.Open("postgres", cfg.DatabaseURL)
+		if err == nil {
+			err = dbConn.Ping()
+		}
+
+		if err == nil {
+			break
+		}
+
+		slog.Warn("Failed to connect to db, retrying...", slog.Int("attempt", i+1), slog.Any("error", err))
+		time.Sleep(2 * time.Second)
+	}
+
 	if err != nil {
-		slog.Error("Failed to connect to db", slog.Any("error", err))
+		slog.Error("Failed to connect to db after retries", slog.Any("error", err))
 		os.Exit(1)
 	}
 	defer dbConn.Close()
-
-	if err := dbConn.Ping(); err != nil {
-		slog.Error("Failed to ping db", slog.Any("error", err))
-		os.Exit(1)
-	}
 
 	// Run migrations
 	if err := db.Migrate(ctx, dbConn); err != nil {
@@ -553,7 +560,7 @@ func main() {
 	validator := middleware.OapiRequestValidatorWithOptions(swagger, &middleware.Options{
 		SilenceServersWarning: true,
 	})
-	
+
 	apiHandler := validator(http.StripPrefix("/api", apiMux))
 	mux.Handle("/api/", apiHandler)
 
