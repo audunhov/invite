@@ -24,9 +24,11 @@ import (
 	"invite/config"
 	"invite/db"
 	"invite/email"
+	"invite/internal/limiter"
 
 	middleware "github.com/oapi-codegen/nethttp-middleware"
 	"github.com/swaggest/swgui/v5emb"
+	"golang.org/x/time/rate"
 )
 
 type Invite struct {
@@ -419,7 +421,11 @@ func (ls *SprintStrategy) Execute(ctx context.Context, invite Invite, phase Phas
 					if !ok {
 						return nil
 					}
-					_, err := ls.app.InvitePerson(gCtx, invite, p)
+					_, err := ls.app.InvitePerson(gCtx, invite, Person{
+						ID:    p.ID,
+						Email: p.Email,
+						Name:  p.Name,
+					})
 					if err != nil {
 						return err
 					}
@@ -429,7 +435,11 @@ func (ls *SprintStrategy) Execute(ctx context.Context, invite Invite, phase Phas
 	}
 
 	for _, p := range persons {
-		jobs <- p
+		jobs <- Person{
+			ID:    p.ID,
+			Email: p.Email,
+			Name:  p.Name,
+		}
 	}
 	close(jobs)
 
@@ -538,10 +548,13 @@ func main() {
 	}
 
 	// 4. Initialize API server
+	ipLimiter := limiter.NewIPRateLimiter(rate.Every(time.Second), 5)
 	server := &api.Server{
 		Queries:         app.Queries,
 		StartInviteFunc: app.StartInviteProcess,
 		GetProgressFunc: app.GetPhaseProgress,
+		Limiter:         ipLimiter,
+		EmailService:    app.EmailService,
 	}
 	strictHandler := api.NewStrictHandler(server, nil)
 
@@ -572,12 +585,46 @@ func main() {
 	api.HandlerFromMux(strictHandler, apiMux)
 
 	// Mount API at /api/ with validation
-	// Note: The validator must see the /api prefix to match the servers block in openapi.yaml
 	validator := middleware.OapiRequestValidatorWithOptions(swagger, &middleware.Options{
 		SilenceServersWarning: true,
 	})
 
-	apiHandler := validator(http.StripPrefix("/api", apiMux))
+	// Wrap apiMux with rate limiter and auth middleware
+	handler := http.Handler(apiMux)
+	
+	// Apply AuthMiddleware to everything under /api/ EXCEPT:
+	// - /api/auth/login
+	// - /api/auth/forgot-password
+	// - /api/auth/reset-password
+	// - /api/respond/*
+	protectedHandler := server.AuthMiddleware(handler)
+	
+	finalApiHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		
+		// Rate limit sensitive endpoints
+		if strings.HasPrefix(path, "/auth/login") || 
+		   strings.HasPrefix(path, "/auth/forgot-password") || 
+		   strings.HasPrefix(path, "/respond/") {
+			limiter := ipLimiter.GetLimiter(r.RemoteAddr)
+			if !limiter.Allow() {
+				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+				return
+			}
+		}
+
+		if strings.HasPrefix(path, "/auth/login") || 
+		   strings.HasPrefix(path, "/auth/forgot-password") || 
+		   strings.HasPrefix(path, "/auth/reset-password") || 
+		   strings.HasPrefix(path, "/respond/") {
+			handler.ServeHTTP(w, r)
+			return
+		}
+		
+		protectedHandler.ServeHTTP(w, r)
+	})
+
+	apiHandler := validator(http.StripPrefix("/api", finalApiHandler))
 	mux.Handle("/api/", apiHandler)
 
 	// 3. Frontend (catch-all)

@@ -166,17 +166,23 @@ func (q *Queries) CreateInvitee(ctx context.Context, arg CreateInviteeParams) er
 }
 
 const createPerson = `-- name: CreatePerson :one
-INSERT INTO persons (id, email, name) VALUES ($1, $2, $3) RETURNING id, email, name, password_hash, password_reset_token, password_reset_expires_at
+INSERT INTO persons (id, email, name, password_hash) VALUES ($1, $2, $3, $4) RETURNING id, email, name, password_hash, password_reset_token, password_reset_expires_at
 `
 
 type CreatePersonParams struct {
-	ID    uuid.UUID `json:"id"`
-	Email string    `json:"email"`
-	Name  string    `json:"name"`
+	ID           uuid.UUID      `json:"id"`
+	Email        string         `json:"email"`
+	Name         string         `json:"name"`
+	PasswordHash sql.NullString `json:"password_hash"`
 }
 
 func (q *Queries) CreatePerson(ctx context.Context, arg CreatePersonParams) (Person, error) {
-	row := q.db.QueryRowContext(ctx, createPerson, arg.ID, arg.Email, arg.Name)
+	row := q.db.QueryRowContext(ctx, createPerson,
+		arg.ID,
+		arg.Email,
+		arg.Name,
+		arg.PasswordHash,
+	)
 	var i Person
 	err := row.Scan(
 		&i.ID,
@@ -987,19 +993,26 @@ const updatePerson = `-- name: UpdatePerson :one
 UPDATE persons
 SET 
     email = COALESCE($1, email),
-    name = COALESCE($2, name)
-WHERE id = $3
+    name = COALESCE($2, name),
+    password_hash = COALESCE($3, password_hash)
+WHERE id = $4
 RETURNING id, email, name, password_hash, password_reset_token, password_reset_expires_at
 `
 
 type UpdatePersonParams struct {
-	Email sql.NullString `json:"email"`
-	Name  sql.NullString `json:"name"`
-	ID    uuid.UUID      `json:"id"`
+	Email        sql.NullString `json:"email"`
+	Name         sql.NullString `json:"name"`
+	PasswordHash sql.NullString `json:"password_hash"`
+	ID           uuid.UUID      `json:"id"`
 }
 
 func (q *Queries) UpdatePerson(ctx context.Context, arg UpdatePersonParams) (Person, error) {
-	row := q.db.QueryRowContext(ctx, updatePerson, arg.Email, arg.Name, arg.ID)
+	row := q.db.QueryRowContext(ctx, updatePerson,
+		arg.Email,
+		arg.Name,
+		arg.PasswordHash,
+		arg.ID,
+	)
 	var i Person
 	err := row.Scan(
 		&i.ID,

@@ -1,11 +1,25 @@
 <script setup lang="ts">
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { onMounted } from 'vue'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from './stores/auth'
+
 const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
+
+onMounted(async () => {
+  await auth.checkAuth()
+})
+
+async function handleLogout() {
+  await auth.logout()
+  router.push('/login')
+}
 </script>
 
 <template>
   <div class="min-h-full">
-    <nav v-if="route.name !== 'respond'" class="border-b border-gray-200 bg-white dark:border-white/10 dark:bg-gray-900">
+    <nav v-if="auth.isAuthenticated && !['login', 'forgot-password', 'reset-password', 'respond'].includes(route.name as string)" class="border-b border-gray-200 bg-white dark:border-white/10 dark:bg-gray-900">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="flex h-16 justify-between">
           <div class="flex">
@@ -96,6 +110,10 @@ const route = useRoute()
                 popover
                 class="w-48 origin-top-right rounded-md bg-white py-1 shadow-lg outline outline-black/5 transition transition-discrete [--anchor-gap:--spacing(2)] data-closed:scale-95 data-closed:transform data-closed:opacity-0 data-enter:duration-200 data-enter:ease-out data-leave:duration-75 data-leave:ease-in dark:bg-gray-800 dark:shadow-none dark:-outline-offset-1 dark:outline-white/10"
               >
+                <div class="px-4 py-2 border-b border-gray-100 dark:border-white/5">
+                  <p class="text-sm font-medium text-gray-900 dark:text-white">{{ auth.user?.name }}</p>
+                  <p class="text-xs text-gray-500 truncate">{{ auth.user?.email }}</p>
+                </div>
                 <a
                   href="#"
                   class="block px-4 py-2 text-sm text-gray-700 focus:bg-gray-100 focus:outline-hidden dark:text-gray-300 dark:focus:bg-white/5"
@@ -106,10 +124,10 @@ const route = useRoute()
                   class="block px-4 py-2 text-sm text-gray-700 focus:bg-gray-100 focus:outline-hidden dark:text-gray-300 dark:focus:bg-white/5"
                   >Settings</a
                 >
-                <a
-                  href="#"
-                  class="block px-4 py-2 text-sm text-gray-700 focus:bg-gray-100 focus:outline-hidden dark:text-gray-300 dark:focus:bg-white/5"
-                  >Sign out</a
+                <button
+                  @click="handleLogout"
+                  class="w-full text-left block px-4 py-2 text-sm text-gray-700 focus:bg-gray-100 focus:outline-hidden dark:text-gray-300 dark:focus:bg-white/5"
+                  >Sign out</button
                 >
               </el-menu>
             </el-dropdown>
@@ -193,8 +211,8 @@ const route = useRoute()
               />
             </div>
             <div class="ml-3">
-              <div class="text-base font-medium text-gray-800 dark:text-white">Tom Cook</div>
-              <div class="text-sm font-medium text-gray-500 dark:text-gray-400">tom@example.com</div>
+              <div class="text-base font-medium text-gray-800 dark:text-white">{{ auth.user?.name }}</div>
+              <div class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ auth.user?.email }}</div>
             </div>
             <button
               type="button"
@@ -230,18 +248,18 @@ const route = useRoute()
               class="block px-4 py-2 text-base font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
               >Settings</a
             >
-            <a
-              href="#"
-              class="block px-4 py-2 text-base font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
-              >Sign out</a
+            <button
+              @click="handleLogout"
+              class="w-full text-left block px-4 py-2 text-base font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
+              >Sign out</button
             >
           </div>
         </div>
       </el-disclosure>
     </nav>
 
-    <div :class="{'py-10': route.name !== 'respond'}" class="bg-white dark:bg-gray-900 min-h-screen text-gray-900 dark:text-white">
-      <header v-if="route.name !== 'respond'">
+    <div :class="{'py-10': auth.isAuthenticated && !['login', 'forgot-password', 'reset-password', 'respond'].includes(route.name as string)}" class="bg-white dark:bg-gray-900 min-h-screen text-gray-900 dark:text-white">
+      <header v-if="auth.isAuthenticated && !['login', 'forgot-password', 'reset-password', 'respond'].includes(route.name as string)">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <h1 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
             {{ route.name === 'persons' ? 'Persons' : route.name === 'invites' ? 'Invites' : route.name === 'groups' ? 'Groups' : 'Dashboard' }}
@@ -249,7 +267,7 @@ const route = useRoute()
         </div>
       </header>
       <main>
-        <div :class="{'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8': route.name !== 'respond'}">
+        <div :class="{'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8': auth.isAuthenticated && !['login', 'forgot-password', 'reset-password', 'respond'].includes(route.name as string)}">
           <RouterView />
         </div>
       </main>

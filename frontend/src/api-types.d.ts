@@ -147,6 +147,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Log in */
+        post: operations["Login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Log out */
+        post: operations["Logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/forgot-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request password reset */
+        post: operations["ForgotPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset password */
+        post: operations["ResetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get current user */
+        get: operations["GetMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/respond/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get invite details for response */
+        get: operations["GetInviteForResponse"];
+        put?: never;
+        /** Accept or decline an invite */
+        post: operations["RespondToInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/groups": {
         parameters: {
             query?: never;
@@ -229,16 +332,19 @@ export interface components {
             /** Format: email */
             email: string;
             name: string;
+            has_password: boolean;
         };
         NewPerson: {
             /** Format: email */
             email: string;
             name: string;
+            password?: string;
         };
         UpdatePerson: {
             /** Format: email */
             email?: string;
             name?: string;
+            password?: string;
         };
         Invite: {
             /** Format: uuid */
@@ -255,6 +361,8 @@ export interface components {
             created_at: string;
             /** @enum {string} */
             status: "pending" | "active" | "completed" | "cancelled";
+            /** Format: uuid */
+            from_person_id: string;
         };
         NewInvite: {
             title: string;
@@ -264,6 +372,8 @@ export interface components {
             /** Format: date-time */
             to?: string;
             duration_ns?: number;
+            /** Format: uuid */
+            from_person_id: string;
         };
         UpdateInvite: {
             title?: string;
@@ -275,6 +385,8 @@ export interface components {
             duration_ns?: number;
             /** @enum {string} */
             status?: "pending" | "active" | "completed" | "cancelled";
+            /** Format: uuid */
+            from_person_id?: string;
         };
         InvitePhase: {
             /** Format: uuid */
@@ -307,9 +419,9 @@ export interface components {
                 /** Format: date-time */
                 next_check_at?: string;
             };
-            pending_invitees?: components["schemas"]["PendingInvitee"][];
+            invitees?: components["schemas"]["InviteeStatus"][];
         };
-        PendingInvitee: {
+        InviteeStatus: {
             /** Format: uuid */
             id: string;
             /** Format: email */
@@ -317,6 +429,26 @@ export interface components {
             name: string;
             /** Format: date-time */
             invited_at: string;
+            /** @enum {string} */
+            status: "pending" | "accepted" | "declined" | "expired";
+            /** Format: uuid */
+            magic_token?: string;
+        };
+        PublicInviteDetails: {
+            /** Format: uuid */
+            invite_id: string;
+            title: string;
+            description?: string;
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to?: string;
+            /** @enum {string} */
+            current_state: "pending" | "accepted" | "declined" | "expired";
+        };
+        InviteResponse: {
+            /** @enum {string} */
+            action: "accept" | "decline";
         };
         Group: {
             /** Format: uuid */
@@ -742,6 +874,201 @@ export interface operations {
                 };
             };
             /** @description Invite not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    Login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                    password: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Logged in */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    Logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logged out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ForgotPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Reset email sent */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ResetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                    password: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Password reset successful */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or expired token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GetMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Person"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GetInviteForResponse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invite details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInviteDetails"];
+                };
+            };
+            /** @description Token not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RespondToInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteResponse"];
+            };
+        };
+        responses: {
+            /** @description Response recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token not found */
             404: {
                 headers: {
                     [name: string]: unknown;

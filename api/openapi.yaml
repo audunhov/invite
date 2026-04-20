@@ -291,6 +291,88 @@ paths:
         '404':
           description: Invite not found
 
+  /auth/login:
+    post:
+      summary: Log in
+      operationId: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Logged in
+        '401':
+          description: Invalid credentials
+  /auth/logout:
+    post:
+      summary: Log out
+      operationId: Logout
+      responses:
+        '204':
+          description: Logged out
+  /auth/forgot-password:
+    post:
+      summary: Request password reset
+      operationId: ForgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '204':
+          description: Reset email sent
+  /auth/reset-password:
+    post:
+      summary: Reset password
+      operationId: ResetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '204':
+          description: Password reset successful
+        '400':
+          description: Invalid or expired token
+  /auth/me:
+    get:
+      summary: Get current user
+      operationId: GetMe
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+        '401':
+          description: Not authenticated
+
   /respond/{token}:
     get:
       summary: Get invite details for response
@@ -490,7 +572,7 @@ components:
   schemas:
     Person:
       type: object
-      required: [id, email, name]
+      required: [id, email, name, has_password]
       properties:
         id:
           type: string
@@ -500,6 +582,8 @@ components:
           format: email
         name:
           type: string
+        has_password:
+          type: boolean
     NewPerson:
       type: object
       required: [email, name]
@@ -509,6 +593,8 @@ components:
           format: email
         name:
           type: string
+        password:
+          type: string
     UpdatePerson:
       type: object
       properties:
@@ -516,6 +602,8 @@ components:
           type: string
           format: email
         name:
+          type: string
+        password:
           type: string
     
     Invite:

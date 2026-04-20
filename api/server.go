@@ -6,17 +6,203 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/runtime/types"
 	"invite/db"
+	"invite/email"
+	"invite/internal/auth"
+	"invite/internal/limiter"
 )
 
 type Server struct {
 	Queries         *db.Queries
 	StartInviteFunc func(ctx context.Context, inviteID uuid.UUID) error
 	GetProgressFunc func(ctx context.Context, phase db.GetActivePhaseForInviteRow) (string, error)
+	Limiter         *limiter.IPRateLimiter
+	EmailService    *email.Service
+}
+
+type contextKey string
+
+const (
+	personContextKey    contextKey = "person"
+	sessionIDContextKey contextKey = "session_id"
+)
+
+func (s *Server) AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("session_id")
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		sessionID, err := uuid.Parse(cookie.Value)
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		session, err := s.Queries.GetSession(r.Context(), sessionID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), personContextKey, db.Person{
+			ID:    session.PersonID,
+			Email: session.Email,
+			Name:  session.Name,
+		})
+		ctx = context.WithValue(ctx, sessionIDContextKey, sessionID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+type LoginSuccessResponse struct {
+	SessionID uuid.UUID
+}
+
+func (r LoginSuccessResponse) VisitLoginResponse(w http.ResponseWriter) error {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_id",
+		Value:    r.SessionID.String(),
+		Path:     "/",
+		Expires:  time.Now().Add(24 * 7 * time.Hour), // 7 days
+		HttpOnly: true,
+		Secure:   false, // Set to true in production
+		SameSite: http.SameSiteLaxMode,
+	})
+	w.WriteHeader(200)
+	return nil
+}
+
+type LogoutSuccessResponse struct{}
+
+func (r LogoutSuccessResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_id",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	})
+	w.WriteHeader(204)
+	return nil
+}
+
+// Auth Handlers
+func (s *Server) Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error) {
+	p, err := s.Queries.GetPersonByEmail(ctx, string(request.Body.Email))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Login401Response{}, nil
+		}
+		return nil, err
+	}
+
+	if !p.PasswordHash.Valid || !auth.CheckPassword(request.Body.Password, p.PasswordHash.String) {
+		return Login401Response{}, nil
+	}
+
+	sessionID := uuid.New()
+	_, err = s.Queries.CreateSession(ctx, db.CreateSessionParams{
+		ID:        sessionID,
+		PersonID:  p.ID,
+		ExpiresAt: time.Now().Add(24 * 7 * time.Hour),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return LoginSuccessResponse{SessionID: sessionID}, nil
+}
+
+func (s *Server) Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error) {
+	sessionID, ok := ctx.Value(sessionIDContextKey).(uuid.UUID)
+	if ok {
+		s.Queries.DeleteSession(ctx, sessionID)
+	}
+	return LogoutSuccessResponse{}, nil
+}
+
+func (s *Server) ForgotPassword(ctx context.Context, request ForgotPasswordRequestObject) (ForgotPasswordResponseObject, error) {
+	p, err := s.Queries.GetPersonByEmail(ctx, string(request.Body.Email))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ForgotPassword204Response{}, nil
+		}
+		return nil, err
+	}
+
+	token := auth.GenerateSecureToken()
+	_, err = s.Queries.UpdatePersonAuth(ctx, db.UpdatePersonAuthParams{
+		ID:                     p.ID,
+		PasswordResetToken:     sql.NullString{String: token, Valid: true},
+		PasswordResetExpiresAt: sql.NullTime{Time: time.Now().Add(1 * time.Hour), Valid: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		if err := s.EmailService.SendResetPasswordEmail(p.Email, token); err != nil {
+			slog.Error("Failed to send reset password email", slog.Any("error", err), slog.String("email", p.Email))
+		}
+	}()
+
+	return ForgotPassword204Response{}, nil
+}
+
+func (s *Server) ResetPassword(ctx context.Context, request ResetPasswordRequestObject) (ResetPasswordResponseObject, error) {
+	p, err := s.Queries.GetPersonByResetToken(ctx, sql.NullString{String: request.Body.Token, Valid: true})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ResetPassword400Response{}, nil
+		}
+		return nil, err
+	}
+
+	hash, err := auth.HashPassword(request.Body.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.Queries.UpdatePersonAuth(ctx, db.UpdatePersonAuthParams{
+		ID:                     p.ID,
+		PasswordHash:           sql.NullString{String: hash, Valid: true},
+		PasswordResetToken:     sql.NullString{Valid: false},
+		PasswordResetExpiresAt: sql.NullTime{Valid: false},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return ResetPassword204Response{}, nil
+}
+
+func (s *Server) GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error) {
+	p, ok := ctx.Value(personContextKey).(db.Person)
+	if !ok {
+		return GetMe401Response{}, nil
+	}
+
+	return GetMe200JSONResponse(Person{
+		Id:          p.ID,
+		Email:       types.Email(p.Email),
+		Name:        p.Name,
+		HasPassword: true, // If they are logged in, they have a password
+	}), nil
 }
 
 var _ StrictServerInterface = (*Server)(nil)
@@ -75,9 +261,10 @@ func (s *Server) ListPersons(ctx context.Context, request ListPersonsRequestObje
 	res := []Person{}
 	for _, p := range persons {
 		res = append(res, Person{
-			Id:    p.ID,
-			Email: types.Email(p.Email),
-			Name:  p.Name,
+			Id:          p.ID,
+			Email:       types.Email(p.Email),
+			Name:        p.Name,
+			HasPassword: p.PasswordHash.Valid,
 		})
 	}
 
@@ -86,19 +273,30 @@ func (s *Server) ListPersons(ctx context.Context, request ListPersonsRequestObje
 
 func (s *Server) CreatePerson(ctx context.Context, request CreatePersonRequestObject) (CreatePersonResponseObject, error) {
 	newID := uuid.New()
-	p, err := s.Queries.CreatePerson(ctx, db.CreatePersonParams{
+	params := db.CreatePersonParams{
 		ID:    newID,
 		Email: string(request.Body.Email),
 		Name:  request.Body.Name,
-	})
+	}
+
+	if request.Body.Password != nil {
+		hash, err := auth.HashPassword(*request.Body.Password)
+		if err != nil {
+			return nil, err
+		}
+		params.PasswordHash = sql.NullString{String: hash, Valid: true}
+	}
+
+	p, err := s.Queries.CreatePerson(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 
 	return CreatePerson201JSONResponse(Person{
-		Id:    p.ID,
-		Email: types.Email(p.Email),
-		Name:  p.Name,
+		Id:          p.ID,
+		Email:       types.Email(p.Email),
+		Name:        p.Name,
+		HasPassword: p.PasswordHash.Valid,
 	}), nil
 }
 
@@ -112,9 +310,10 @@ func (s *Server) GetPerson(ctx context.Context, request GetPersonRequestObject) 
 	}
 
 	return GetPerson200JSONResponse(Person{
-		Id:    p.ID,
-		Email: types.Email(p.Email),
-		Name:  p.Name,
+		Id:          p.ID,
+		Email:       types.Email(p.Email),
+		Name:        p.Name,
+		HasPassword: p.PasswordHash.Valid,
 	}), nil
 }
 
@@ -128,6 +327,13 @@ func (s *Server) UpdatePerson(ctx context.Context, request UpdatePersonRequestOb
 	if request.Body.Name != nil {
 		params.Name = sql.NullString{String: *request.Body.Name, Valid: true}
 	}
+	if request.Body.Password != nil {
+		hash, err := auth.HashPassword(*request.Body.Password)
+		if err != nil {
+			return nil, err
+		}
+		params.PasswordHash = sql.NullString{String: hash, Valid: true}
+	}
 
 	p, err := s.Queries.UpdatePerson(ctx, params)
 	if err != nil {
@@ -138,14 +344,34 @@ func (s *Server) UpdatePerson(ctx context.Context, request UpdatePersonRequestOb
 	}
 
 	return UpdatePerson200JSONResponse(Person{
-		Id:    p.ID,
-		Email: types.Email(p.Email),
-		Name:  p.Name,
+		Id:          p.ID,
+		Email:       types.Email(p.Email),
+		Name:        p.Name,
+		HasPassword: p.PasswordHash.Valid,
 	}), nil
 }
 
 func (s *Server) DeletePerson(ctx context.Context, request DeletePersonRequestObject) (DeletePersonResponseObject, error) {
-	err := s.Queries.DeletePerson(ctx, request.Id)
+	// Security: check if it's the last admin
+	p, err := s.Queries.GetPerson(ctx, request.Id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DeletePerson404Response{}, nil
+		}
+		return nil, err
+	}
+
+	if p.PasswordHash.Valid {
+		count, err := s.Queries.CountAdmins(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if count <= 1 {
+			return nil, errors.New("cannot delete the last administrative user")
+		}
+	}
+
+	err = s.Queries.DeletePerson(ctx, request.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -247,9 +473,10 @@ func (s *Server) ListGroupMembers(ctx context.Context, request ListGroupMembersR
 	var res []Person
 	for _, p := range persons {
 		res = append(res, Person{
-			Id:    p.ID,
-			Email: types.Email(p.Email),
-			Name:  p.Name,
+			Id:          p.ID,
+			Email:       types.Email(p.Email),
+			Name:        p.Name,
+			HasPassword: p.PasswordHash.Valid,
 		})
 	}
 

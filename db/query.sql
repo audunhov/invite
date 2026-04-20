@@ -2,7 +2,7 @@
 SELECT * FROM persons WHERE id = $1;
 
 -- name: CreatePerson :one
-INSERT INTO persons (id, email, name) VALUES ($1, $2, $3) RETURNING *;
+INSERT INTO persons (id, email, name, password_hash) VALUES ($1, $2, $3, $4) RETURNING *;
 
 -- name: ListPersons :many
 SELECT * FROM persons;
@@ -11,7 +11,8 @@ SELECT * FROM persons;
 UPDATE persons
 SET 
     email = COALESCE(sqlc.narg('email'), email),
-    name = COALESCE(sqlc.narg('name'), name)
+    name = COALESCE(sqlc.narg('name'), name),
+    password_hash = COALESCE(sqlc.narg('password_hash'), password_hash)
 WHERE id = sqlc.arg('id')
 RETURNING *;
 
