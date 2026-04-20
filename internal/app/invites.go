@@ -288,6 +288,19 @@ func (app *App) HandleInviteeResponse(ctx context.Context, token uuid.UUID, newS
 
 					// If completed, trigger next phase
 					if state.Status == "completed" {
+						// Logic change: if it was an acceptance, we mark the WHOLE invite as completed and DON'T advance.
+						if event.Kind == "invitee_accepted" {
+							slog.Info("Invite accepted, marking entire process as completed", slog.String("invite_id", invite.ID.String()))
+							_, err = app.Queries.UpdateInvite(ctx, db.UpdateInviteParams{
+								ID:     invite.ID,
+								Status: sql.NullString{String: "completed", Valid: true},
+							})
+							if err != nil {
+								slog.Error("Failed to mark invite as completed after acceptance", slog.Any("error", err))
+							}
+							return nil // Stop here
+						}
+
 						slog.Info("Phase completed after event, advancing", slog.String("phase_id", phase.ID.String()))
 						if err := app.AdvanceToNextPhase(ctx, invite, phase); err != nil {
 							slog.Error("Failed to advance phase after event", slog.Any("error", err))
