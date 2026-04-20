@@ -3,8 +3,8 @@ package email
 import (
 	"fmt"
 	"net/smtp"
-	"invite/db"
 	"invite/config"
+	"invite/models"
 )
 
 type Service struct {
@@ -15,7 +15,7 @@ func NewService(cfg *config.Config) *Service {
 	return &Service{cfg: cfg}
 }
 
-func (s *Service) SendInvite(recipient db.Person, sender db.Person, inviteTitle string, inviteDesc string, token string) error {
+func (s *Service) SendInvite(recipient models.Person, sender models.Person, inviteTitle string, inviteDesc string, token string) error {
 	if s.cfg.SMTPHost == "" {
 		return nil
 	}

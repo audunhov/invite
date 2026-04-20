@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"invite/db"
+	"invite/internal/strategy"
+	"invite/models"
 )
 
 func (app *App) RunOrchestrator(ctx context.Context) error {
@@ -36,19 +38,19 @@ func (app *App) ProcessActivePhases(ctx context.Context) error {
 	for _, row := range rows {
 		// 2. For each phase:
 		//    a. Load Invite and Phase data
-		invite := Invite{
-			ID:          row.InviteID,
-			Title:       row.Title,
-			Description: row.Description.String,
-			From:        row.From,
-			To:          row.To.Time,
-			Duration:    time.Duration(row.Duration.Int64),
-			CreatedAt:   row.CreatedAt,
-			Status:      row.InviteStatus,
+		invite := models.Invite{
+			ID:           row.InviteID,
+			Title:        row.Title,
+			Description:  row.Description.String,
+			From:         row.From,
+			To:           row.To.Time,
+			Duration:     time.Duration(row.Duration.Int64),
+			CreatedAt:    row.CreatedAt,
+			Status:       row.InviteStatus,
 			FromPersonID: row.FromPersonID.UUID,
 		}
 
-		phase := Phase{
+		phase := models.Phase{
 			ID:             row.PhaseID,
 			InviteID:       row.InviteID,
 			Order:          int(row.Order),
@@ -56,18 +58,15 @@ func (app *App) ProcessActivePhases(ctx context.Context) error {
 			StrategyConfig: row.StrategyConfig,
 		}
 
-		state := &PhaseState{
+		state := &models.PhaseState{
 			PhaseID:     row.PhaseID,
 			Status:      row.PhaseStatus,
-			NextCheckAt: nil,
+			NextCheckAt: row.NextCheckAt,
 			Data:        row.PhaseData,
-		}
-		if row.NextCheckAt.Valid {
-			state.NextCheckAt = &row.NextCheckAt.Time
 		}
 
 		//    b. Load Strategy via LoadStrategy
-		strategy, err := LoadStrategy(app, phase)
+		s, err := strategy.LoadStrategy(app.Queries, app, phase)
 		if err != nil {
 			slog.Error("Failed to load strategy",
 				slog.String("phase_id", row.PhaseID.String()),
@@ -76,7 +75,7 @@ func (app *App) ProcessActivePhases(ctx context.Context) error {
 		}
 
 		//    c. Call strategy.Resume(...)
-		if err := strategy.Resume(ctx, invite, phase, state); err != nil {
+		if err := s.Resume(ctx, invite, phase, state); err != nil {
 			slog.Error("Failed to resume strategy",
 				slog.String("phase_id", row.PhaseID.String()),
 				slog.Any("error", err))
@@ -85,12 +84,10 @@ func (app *App) ProcessActivePhases(ctx context.Context) error {
 
 		//    d. Update state in DB
 		updateParams := db.UpdatePhaseStateParams{
-			PhaseID: state.PhaseID,
-			Status:  state.Status,
-			Data:    state.Data,
-		}
-		if state.NextCheckAt != nil {
-			updateParams.NextCheckAt = sql.NullTime{Time: *state.NextCheckAt, Valid: true}
+			PhaseID:     state.PhaseID,
+			Status:      state.Status,
+			NextCheckAt: state.NextCheckAt,
+			Data:        state.Data,
 		}
 
 		if err := app.Queries.UpdatePhaseState(ctx, updateParams); err != nil {

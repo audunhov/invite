@@ -69,13 +69,20 @@ func TestInviteAPI(t *testing.T) {
 	server := &api.Server{Queries: queries}
 	ctx := context.Background()
 
+	// Create a sender person
+	pRes, _ := server.CreatePerson(ctx, api.CreatePersonRequestObject{
+		Body: &api.NewPerson{Email: "sender@test.com", Name: "Sender"},
+	})
+	sender := pRes.(api.CreatePerson201JSONResponse)
+
 	title := "Test Invite"
 	from := time.Now().Add(24 * time.Hour).Truncate(time.Microsecond)
 	
 	req := api.CreateInviteRequestObject{
 		Body: &api.NewInvite{
-			Title: title,
-			From:  from,
+			Title:        title,
+			From:         from,
+			FromPersonId: sender.Id,
 		},
 	}
 

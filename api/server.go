@@ -16,12 +16,13 @@ import (
 	"invite/email"
 	"invite/internal/auth"
 	"invite/internal/limiter"
+	"invite/models"
 )
 
 type Server struct {
 	Queries         *db.Queries
 	StartInviteFunc func(ctx context.Context, inviteID uuid.UUID) error
-	GetProgressFunc func(ctx context.Context, phase db.GetActivePhaseForInviteRow) (string, error)
+	GetProgressFunc func(ctx context.Context, row db.GetActivePhaseForInviteRow) (string, error)
 	Limiter         *limiter.IPRateLimiter
 	EmailService    *email.Service
 }
@@ -57,7 +58,7 @@ func (s *Server) AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), personContextKey, db.Person{
+		ctx := context.WithValue(r.Context(), personContextKey, models.Person{
 			ID:    session.PersonID,
 			Email: session.Email,
 			Name:  session.Name,
@@ -192,7 +193,7 @@ func (s *Server) ResetPassword(ctx context.Context, request ResetPasswordRequest
 }
 
 func (s *Server) GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error) {
-	p, ok := ctx.Value(personContextKey).(db.Person)
+	p, ok := ctx.Value(personContextKey).(models.Person)
 	if !ok {
 		return GetMe401Response{}, nil
 	}

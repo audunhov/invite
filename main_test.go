@@ -10,13 +10,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"invite/db"
+	"invite/internal/app"
+	"invite/internal/strategy/sprint"
+	"invite/models"
 	"invite/testutil"
 )
 
 func TestSprintStrategy_Execute(t *testing.T) {
 	dbConn := testutil.StartTestDB(t)
 	queries := db.New(dbConn)
-	app := &App{Queries: queries, DB: dbConn}
+	application := app.New(dbConn, queries, nil)
 	ctx := context.Background()
 
 	// 1. Setup test data (Persons)
@@ -38,12 +41,13 @@ func TestSprintStrategy_Execute(t *testing.T) {
 	_, err = dbConn.ExecContext(ctx, `INSERT INTO invite_phases (id, invite_id, "order", strategy_kind, strategy_config) VALUES ($1, $2, 1, 'sprint', $3)`, phaseID, inviteID, cfgBytes)
 	require.NoError(t, err)
 
-	invite := Invite{ID: inviteID, Status: "active"}
-	phase := Phase{ID: phaseID}
+	invite := models.Invite{ID: inviteID, Status: "active"}
+	phase := models.Phase{ID: phaseID}
 
 	// 3. Initialize SprintStrategy
-	strategy := &SprintStrategy{
-		app:        app,
+	strategy := &sprint.SprintStrategy{
+		Queries:    queries,
+		Inviter:    application,
 		Recipients: []uuid.UUID{person1ID, person2ID},
 		Deadline:   time.Now().Add(1 * time.Hour),
 	}
