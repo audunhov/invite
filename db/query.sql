@@ -243,3 +243,19 @@ SELECT * FROM email_logs WHERE invitee_id = $1 ORDER BY created_at DESC LIMIT 1;
 
 -- name: GetEmailLog :one
 SELECT * FROM email_logs WHERE id = $1;
+
+-- name: GetRecentActivity :many
+(SELECT i.created_at as timestamp, 'invitee_response' as type, p.name || ' ' || i.state || ' invite "' || inv.title || '"' as message 
+ FROM invitees i JOIN persons p ON i.contact_id = p.id JOIN invites inv ON i.invite_id = inv.id 
+ WHERE i.state != 'pending' AND i.created_at > NOW() - INTERVAL '30 days')
+UNION ALL
+(SELECT created_at as timestamp, 'email_error' as type, 'Email failed to ' || recipient_email || ': ' || COALESCE(error_message, 'Unknown error') as message 
+ FROM email_logs WHERE status = 'failed' AND created_at > NOW() - INTERVAL '30 days')
+ORDER BY timestamp DESC LIMIT 20;
+
+-- name: GetGlobalStats :one
+SELECT 
+    (SELECT COUNT(*) FROM invites WHERE status = 'active')::int as active_invites,
+    (SELECT COUNT(*) FROM email_logs WHERE status = 'failed' AND created_at > NOW() - INTERVAL '30 days')::int as failed_emails,
+    COALESCE((SELECT (COUNT(CASE WHEN state = 'accepted' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0))::float 
+     FROM invitees WHERE created_at > NOW() - INTERVAL '30 days'), 0.0)::float as success_rate;

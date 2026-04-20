@@ -584,6 +584,27 @@ func (q *Queries) GetFirstInvitePhase(ctx context.Context, inviteID uuid.UUID) (
 	return i, err
 }
 
+const getGlobalStats = `-- name: GetGlobalStats :one
+SELECT 
+    (SELECT COUNT(*) FROM invites WHERE status = 'active')::int as active_invites,
+    (SELECT COUNT(*) FROM email_logs WHERE status = 'failed' AND created_at > NOW() - INTERVAL '30 days')::int as failed_emails,
+    COALESCE((SELECT (COUNT(CASE WHEN state = 'accepted' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0))::float 
+     FROM invitees WHERE created_at > NOW() - INTERVAL '30 days'), 0.0)::float as success_rate
+`
+
+type GetGlobalStatsRow struct {
+	ActiveInvites int32   `json:"active_invites"`
+	FailedEmails  int32   `json:"failed_emails"`
+	SuccessRate   float64 `json:"success_rate"`
+}
+
+func (q *Queries) GetGlobalStats(ctx context.Context) (GetGlobalStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getGlobalStats)
+	var i GetGlobalStatsRow
+	err := row.Scan(&i.ActiveInvites, &i.FailedEmails, &i.SuccessRate)
+	return i, err
+}
+
 const getGroup = `-- name: GetGroup :one
 SELECT id, name, description FROM groups WHERE id = $1
 `
@@ -817,6 +838,45 @@ func (q *Queries) GetPersonByResetToken(ctx context.Context, passwordResetToken 
 		&i.PasswordResetExpiresAt,
 	)
 	return i, err
+}
+
+const getRecentActivity = `-- name: GetRecentActivity :many
+(SELECT i.created_at as timestamp, 'invitee_response' as type, p.name || ' ' || i.state || ' invite "' || inv.title || '"' as message 
+ FROM invitees i JOIN persons p ON i.contact_id = p.id JOIN invites inv ON i.invite_id = inv.id 
+ WHERE i.state != 'pending' AND i.created_at > NOW() - INTERVAL '30 days')
+UNION ALL
+(SELECT created_at as timestamp, 'email_error' as type, 'Email failed to ' || recipient_email || ': ' || COALESCE(error_message, 'Unknown error') as message 
+ FROM email_logs WHERE status = 'failed' AND created_at > NOW() - INTERVAL '30 days')
+ORDER BY timestamp DESC LIMIT 20
+`
+
+type GetRecentActivityRow struct {
+	Timestamp time.Time   `json:"timestamp"`
+	Type      string      `json:"type"`
+	Message   interface{} `json:"message"`
+}
+
+func (q *Queries) GetRecentActivity(ctx context.Context) ([]GetRecentActivityRow, error) {
+	rows, err := q.db.QueryContext(ctx, getRecentActivity)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRecentActivityRow
+	for rows.Next() {
+		var i GetRecentActivityRow
+		if err := rows.Scan(&i.Timestamp, &i.Type, &i.Message); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getSession = `-- name: GetSession :one

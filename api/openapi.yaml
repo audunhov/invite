@@ -291,6 +291,20 @@ paths:
         '404':
           description: Invite not found
 
+  /dashboard/stats:
+    get:
+      summary: Get dashboard statistics and activity
+      operationId: GetDashboardStats
+      responses:
+        '200':
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStats'
+        '401':
+          description: Not authenticated
+
   /emails/{id}/retry:
     post:
       summary: Retry a failed email
@@ -854,3 +868,33 @@ components:
         person_id:
           type: string
           format: uuid
+
+    DashboardStats:
+      type: object
+      required: [stats, bottlenecks, activity]
+      properties:
+        stats:
+          type: object
+          properties:
+            active_invites: { type: integer }
+            failed_emails: { type: integer }
+            success_rate: { type: number }
+        bottlenecks:
+          type: array
+          items:
+            type: object
+            properties:
+              invite_id: { type: string, format: uuid }
+              title: { type: string }
+              phase_order: { type: integer }
+              strategy_kind: { type: string }
+              waiting_for: { type: string }
+              active_since: { type: string, format: date-time }
+        activity:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp: { type: string, format: date-time }
+              type: { type: string }
+              message: { type: string }
