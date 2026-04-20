@@ -291,6 +291,25 @@ paths:
         '404':
           description: Invite not found
 
+  /emails/{id}/retry:
+    post:
+      summary: Retry a failed email
+      operationId: RetryEmail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Retry successful
+        '400':
+          description: Email cannot be retried
+        '404':
+          description: Email log not found
+
   /auth/login:
     post:
       summary: Log in
@@ -760,6 +779,15 @@ components:
         magic_token:
           type: string
           format: uuid
+        email_id:
+          type: string
+          format: uuid
+        email_status:
+          type: string
+        email_error:
+          type: string
+        email_attempts:
+          type: integer
 
     PublicInviteDetails:
       type: object

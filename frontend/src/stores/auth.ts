@@ -28,7 +28,7 @@ export const useAuthStore = defineStore('auth', () => {
     return isAuthenticated.value
   }
 
-  async function login(credentials: any) {
+  async function login(credentials: Record<string, string>) {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

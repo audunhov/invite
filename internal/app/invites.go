@@ -40,7 +40,7 @@ func (app *App) InvitePerson(ctx context.Context, i models.Invite, p models.Pers
 				PasswordResetToken:     s.PasswordResetToken,
 				PasswordResetExpiresAt: s.PasswordResetExpiresAt,
 			}
-			if err := app.EmailService.SendInvite(p, sender, i.Title, i.Description, magicToken.String()); err != nil {
+			if err := app.EmailService.SendInvite(context.Background(), app.Queries, p, sender, i.Title, i.Description, magicToken.String(), inviteeID); err != nil {
 				slog.Error("Failed to send invite email", slog.Any("error", err), slog.String("invite_id", i.ID.String()), slog.String("recipient", p.Email))
 			}
 		} else {

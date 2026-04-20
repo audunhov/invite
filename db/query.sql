@@ -107,7 +107,7 @@ LIMIT 1;
 SELECT * FROM invite_phases WHERE id = $1;
 
 -- name: GetInviteesStatus :many
-SELECT p.id, p.email, p.name, i.created_at AS invited_at, i.state AS status, i.magic_token
+SELECT i.id, p.id AS person_id, p.email, p.name, i.created_at AS invited_at, i.state AS status, i.magic_token
 FROM invitees i
 JOIN persons p ON i.contact_id = p.id
 WHERE i.invite_id = $1

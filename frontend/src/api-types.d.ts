@@ -147,6 +147,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/emails/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry a failed email */
+        post: operations["RetryEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/login": {
         parameters: {
             query?: never;
@@ -433,6 +450,11 @@ export interface components {
             status: "pending" | "accepted" | "declined" | "expired";
             /** Format: uuid */
             magic_token?: string;
+            /** Format: uuid */
+            email_id?: string;
+            email_status?: string;
+            email_error?: string;
+            email_attempts?: number;
         };
         PublicInviteDetails: {
             /** Format: uuid */
@@ -874,6 +896,40 @@ export interface operations {
                 };
             };
             /** @description Invite not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RetryEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retry successful */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email cannot be retried */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email log not found */
             404: {
                 headers: {
                     [name: string]: unknown;

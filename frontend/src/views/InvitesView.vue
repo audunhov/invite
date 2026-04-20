@@ -3,12 +3,9 @@ import { ref, onMounted, reactive, computed } from 'vue'
 import type { components } from '../api-types'
 
 type Invite = components['schemas']['Invite']
-type NewInvite = components['schemas']['NewInvite']
-type UpdateInvite = components['schemas']['UpdateInvite']
 type InvitePhase = components['schemas']['InvitePhase']
 type NewInvitePhase = components['schemas']['NewInvitePhase']
 type InviteStatusReport = components['schemas']['InviteStatusReport']
-type InviteeStatus = components['schemas']['InviteeStatus']
 type Person = components['schemas']['Person']
 type Group = components['schemas']['Group']
 
@@ -117,7 +114,7 @@ function openEditInviteModal(invite: Invite) {
 async function saveInvite() {
   isSavingInvite.value = true
   try {
-    const body: Record<string, any> = {
+    const body: Record<string, unknown> = {
       title: inviteForm.title,
       description: inviteForm.description,
       from: new Date(inviteForm.from).toISOString(),
@@ -183,7 +180,7 @@ async function addPhase() {
   if (!selectedInviteForPhases.value) return
   isAddingPhase.value = true
   try {
-    let strategy_config: any = {}
+    let strategy_config: Record<string, unknown> = {}
     if (phaseForm.strategy_kind === 'ladder') {
       const selectedPersons = phaseForm.selectedRecipientIds
         .map(id => persons.value.find(p => p.id === id))
@@ -278,6 +275,37 @@ function copyLink(token?: string) {
   navigator.clipboard.writeText(url).then(() => {
     alert('Link copied to clipboard!')
   })
+}
+
+function formatStrategyConfig(phase: InvitePhase) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const config = phase.strategy_config as any
+  if (phase.strategy_kind === 'ladder') {
+    const count = (config.List || []).length
+    const timeout = Math.round((config.Timeout || 0) / 60000000000)
+    return `Ladder: ${count} persons, ${timeout}m timeout`
+  } else if (phase.strategy_kind === 'sprint') {
+    const count = (config.Recipients || []).length
+    const deadline = config.Deadline ? new Date(config.Deadline).toLocaleString() : 'N/A'
+    return `Sprint: ${count} recipients, deadline ${deadline}`
+  }
+  return JSON.stringify(phase.strategy_config)
+}
+
+async function retryEmail(emailId: string) {
+  try {
+    const response = await fetch(`/api/emails/${emailId}/retry`, { method: 'POST' })
+    if (!response.ok) throw new Error('Failed to retry email')
+    
+    // Refresh status report
+    const inviteId = statusReport.value?.invite_id
+    if (inviteId) {
+      const res = await fetch(`/api/invites/${inviteId}/status`)
+      if (res.ok) statusReport.value = await res.json()
+    }
+  } catch (err) {
+    alert(err)
+  }
 }
 
 const statusCounts = computed(() => {
@@ -408,7 +436,7 @@ onMounted(fetchData)
                   <div>
                     <span class="font-bold mr-3">#{{ p.order }}</span>
                     <span class="uppercase text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded mr-3">{{ p.strategy_kind }}</span>
-                    <span class="text-sm text-gray-500">Config: {{ JSON.stringify(p.strategy_config).slice(0, 50) }}...</span>
+                    <span class="text-sm text-gray-500">{{ formatStrategyConfig(p) }}</span>
                   </div>
                   <button @click="removePhase(p)" class="text-red-600 hover:text-red-900 text-sm">Remove</button>
                 </li>
@@ -513,8 +541,9 @@ onMounted(fetchData)
                     <thead>
                       <tr class="text-left text-xs text-gray-400 uppercase">
                         <th class="pb-2">Name</th>
-                        <th class="pb-2 text-center">Status</th>
-                        <th class="pb-2 text-right">Link</th>
+                        <th class="pb-2 text-center">Invite Status</th>
+                        <th class="pb-2 text-center">Email Status</th>
+                        <th class="pb-2 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 dark:divide-white/5">
@@ -532,7 +561,22 @@ onMounted(fetchData)
                             {{ p.status }}
                           </span>
                         </td>
-                        <td class="py-3 text-right">
+                        <td class="py-3 text-center">
+                          <div v-if="p.email_status" class="flex flex-col items-center">
+                            <span :class="{
+                              'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400': p.email_status === 'sent',
+                              'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400': p.email_status === 'failed' && (p.email_attempts || 0) < 3,
+                              'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400': p.email_status === 'failed' && (p.email_attempts || 0) >= 3,
+                              'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300': p.email_status === 'pending'
+                            }" class="px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide">
+                              {{ p.email_status === 'failed' && (p.email_attempts || 0) < 3 ? 'Retrying' : p.email_status }}
+                            </span>
+                            <span v-if="p.email_error" class="text-[9px] text-red-500 mt-1 max-w-[100px] truncate" :title="p.email_error">{{ p.email_error }}</span>
+                          </div>
+                          <span v-else class="text-xs text-gray-400">-</span>
+                        </td>
+                        <td class="py-3 text-right space-x-2">
+                          <button v-if="p.email_status === 'failed' && p.email_id" @click="retryEmail(p.email_id)" class="text-xs bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-1 rounded">Retry</button>
                           <button v-if="p.status === 'pending'" @click="copyLink(p.magic_token)" class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded">Copy Link</button>
                         </td>
                       </tr>

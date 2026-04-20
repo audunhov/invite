@@ -160,7 +160,7 @@ func (s *Server) ForgotPassword(ctx context.Context, request ForgotPasswordReque
 	}
 
 	go func() {
-		if err := s.EmailService.SendResetPasswordEmail(p.Email, token); err != nil {
+		if err := s.EmailService.SendResetPasswordEmail(context.Background(), s.Queries, p.Email, token); err != nil {
 			slog.Error("Failed to send reset password email", slog.Any("error", err), slog.String("email", p.Email))
 		}
 	}()
@@ -193,6 +193,45 @@ func (s *Server) ResetPassword(ctx context.Context, request ResetPasswordRequest
 	}
 
 	return ResetPassword204Response{}, nil
+}
+
+func (s *Server) RetryEmail(ctx context.Context, request RetryEmailRequestObject) (RetryEmailResponseObject, error) {
+	log, err := s.Queries.GetEmailLog(ctx, request.Id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return RetryEmail404Response{}, nil
+		}
+		return nil, err
+	}
+
+	// Only allow retrying if it failed
+	if log.Status == "sent" {
+		return RetryEmail400Response{}, nil
+	}
+
+	err = s.EmailService.SendRaw(log.RecipientEmail, log.Subject, log.Body)
+
+	status := "sent"
+	var errMsg sql.NullString
+	if err != nil {
+		status = "failed"
+		errMsg = sql.NullString{String: err.Error(), Valid: true}
+	}
+
+	updateErr := s.Queries.UpdateEmailLogStatus(ctx, db.UpdateEmailLogStatusParams{
+		ID:           log.ID,
+		Status:       status,
+		ErrorMessage: errMsg,
+	})
+	if updateErr != nil {
+		return nil, fmt.Errorf("failed to update email log status: %w", updateErr)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to send email: %w", err)
+	}
+
+	return RetryEmail204Response{}, nil
 }
 
 func (s *Server) GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error) {
@@ -786,14 +825,26 @@ func (s *Server) GetInviteStatus(ctx context.Context, request GetInviteStatusReq
 
 	resInvitees := []InviteeStatus{}
 	for _, ir := range inviteeRows {
-		resInvitees = append(resInvitees, InviteeStatus{
+		is := InviteeStatus{
 			Id:         ir.ID,
 			Email:      types.Email(ir.Email),
 			Name:       ir.Name,
 			InvitedAt:  ir.InvitedAt,
 			Status:     InviteeStatusStatus(ir.Status),
 			MagicToken: &ir.MagicToken,
-		})
+		}
+
+		// Fetch latest email log for this invitee
+		emailLog, err := s.Queries.GetEmailLogByInvitee(ctx, uuid.NullUUID{UUID: ir.ID, Valid: true})
+		if err == nil {
+			is.EmailId = &emailLog.ID
+			is.EmailStatus = &emailLog.Status
+			is.EmailError = toStringPtr(emailLog.ErrorMessage)
+			attempts := int(emailLog.Attempts)
+			is.EmailAttempts = &attempts
+		}
+
+		resInvitees = append(resInvitees, is)
 	}
 	resp.Invitees = &resInvitees
 

@@ -690,7 +690,7 @@ func (q *Queries) GetInviteeByToken(ctx context.Context, magicToken uuid.UUID) (
 }
 
 const getInviteesStatus = `-- name: GetInviteesStatus :many
-SELECT p.id, p.email, p.name, i.created_at AS invited_at, i.state AS status, i.magic_token
+SELECT i.id, p.id AS person_id, p.email, p.name, i.created_at AS invited_at, i.state AS status, i.magic_token
 FROM invitees i
 JOIN persons p ON i.contact_id = p.id
 WHERE i.invite_id = $1
@@ -699,6 +699,7 @@ ORDER BY i.created_at ASC
 
 type GetInviteesStatusRow struct {
 	ID         uuid.UUID `json:"id"`
+	PersonID   uuid.UUID `json:"person_id"`
 	Email      string    `json:"email"`
 	Name       string    `json:"name"`
 	InvitedAt  time.Time `json:"invited_at"`
@@ -717,6 +718,7 @@ func (q *Queries) GetInviteesStatus(ctx context.Context, inviteID uuid.UUID) ([]
 		var i GetInviteesStatusRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.PersonID,
 			&i.Email,
 			&i.Name,
 			&i.InvitedAt,

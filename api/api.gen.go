@@ -244,12 +244,16 @@ type InviteStatusReport struct {
 
 // InviteeStatus defines model for InviteeStatus.
 type InviteeStatus struct {
-	Email      openapi_types.Email `json:"email"`
-	Id         openapi_types.UUID  `json:"id"`
-	InvitedAt  time.Time           `json:"invited_at"`
-	MagicToken *openapi_types.UUID `json:"magic_token,omitempty"`
-	Name       string              `json:"name"`
-	Status     InviteeStatusStatus `json:"status"`
+	Email         openapi_types.Email `json:"email"`
+	EmailAttempts *int                `json:"email_attempts,omitempty"`
+	EmailError    *string             `json:"email_error,omitempty"`
+	EmailId       *openapi_types.UUID `json:"email_id,omitempty"`
+	EmailStatus   *string             `json:"email_status,omitempty"`
+	Id            openapi_types.UUID  `json:"id"`
+	InvitedAt     time.Time           `json:"invited_at"`
+	MagicToken    *openapi_types.UUID `json:"magic_token,omitempty"`
+	Name          string              `json:"name"`
+	Status        InviteeStatusStatus `json:"status"`
 }
 
 // InviteeStatusStatus defines model for InviteeStatus.Status.
@@ -406,6 +410,9 @@ type ServerInterface interface {
 	// Reset password
 	// (POST /auth/reset-password)
 	ResetPassword(w http.ResponseWriter, r *http.Request)
+	// Retry a failed email
+	// (POST /emails/{id}/retry)
+	RetryEmail(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// List all groups
 	// (GET /groups)
 	ListGroups(w http.ResponseWriter, r *http.Request)
@@ -553,6 +560,31 @@ func (siw *ServerInterfaceWrapper) ResetPassword(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ResetPassword(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RetryEmail operation middleware
+func (siw *ServerInterfaceWrapper) RetryEmail(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RetryEmail(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1264,6 +1296,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/auth/logout", wrapper.Logout)
 	m.HandleFunc("GET "+options.BaseURL+"/auth/me", wrapper.GetMe)
 	m.HandleFunc("POST "+options.BaseURL+"/auth/reset-password", wrapper.ResetPassword)
+	m.HandleFunc("POST "+options.BaseURL+"/emails/{id}/retry", wrapper.RetryEmail)
 	m.HandleFunc("GET "+options.BaseURL+"/groups", wrapper.ListGroups)
 	m.HandleFunc("POST "+options.BaseURL+"/groups", wrapper.CreateGroup)
 	m.HandleFunc("DELETE "+options.BaseURL+"/groups/{id}", wrapper.DeleteGroup)
@@ -1393,6 +1426,38 @@ type ResetPassword400Response struct {
 
 func (response ResetPassword400Response) VisitResetPasswordResponse(w http.ResponseWriter) error {
 	w.WriteHeader(400)
+	return nil
+}
+
+type RetryEmailRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type RetryEmailResponseObject interface {
+	VisitRetryEmailResponse(w http.ResponseWriter) error
+}
+
+type RetryEmail204Response struct {
+}
+
+func (response RetryEmail204Response) VisitRetryEmailResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RetryEmail400Response struct {
+}
+
+func (response RetryEmail400Response) VisitRetryEmailResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type RetryEmail404Response struct {
+}
+
+func (response RetryEmail404Response) VisitRetryEmailResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
 	return nil
 }
 
@@ -1971,6 +2036,9 @@ type StrictServerInterface interface {
 	// Reset password
 	// (POST /auth/reset-password)
 	ResetPassword(ctx context.Context, request ResetPasswordRequestObject) (ResetPasswordResponseObject, error)
+	// Retry a failed email
+	// (POST /emails/{id}/retry)
+	RetryEmail(ctx context.Context, request RetryEmailRequestObject) (RetryEmailResponseObject, error)
 	// List all groups
 	// (GET /groups)
 	ListGroups(ctx context.Context, request ListGroupsRequestObject) (ListGroupsResponseObject, error)
@@ -2211,6 +2279,32 @@ func (sh *strictHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ResetPasswordResponseObject); ok {
 		if err := validResponse.VisitResetPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RetryEmail operation middleware
+func (sh *strictHandler) RetryEmail(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request RetryEmailRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RetryEmail(ctx, request.(RetryEmailRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RetryEmail")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RetryEmailResponseObject); ok {
+		if err := validResponse.VisitRetryEmailResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2924,39 +3018,41 @@ func (sh *strictHandler) RespondToInvite(w http.ResponseWriter, r *http.Request,
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"OwAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

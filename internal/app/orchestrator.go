@@ -24,6 +24,9 @@ func (app *App) RunOrchestrator(ctx context.Context) error {
 			if err := app.ProcessActivePhases(ctx); err != nil {
 				slog.Error("Failed to process active phases", slog.Any("error", err))
 			}
+			if err := app.ProcessFailedEmails(ctx); err != nil {
+				slog.Error("Failed to process failed emails", slog.Any("error", err))
+			}
 		}
 	}
 }
