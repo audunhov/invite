@@ -77,6 +77,10 @@ func main() {
 	mux := http.NewServeMux()
 
 	// 1. Metadata & Documentation (no validation)
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 	mux.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, r *http.Request) {
 		swagger, err := api.GetSwagger()
 		if err != nil {

@@ -325,6 +325,7 @@ func (s *Server) GetDashboardStats(ctx context.Context, request GetDashboardStat
 		InviteId     *openapi_types.UUID "json:\"invite_id,omitempty\""
 		PhaseOrder   *int                "json:\"phase_order,omitempty\""
 		StrategyKind *string             "json:\"strategy_kind,omitempty\""
+		Tags         *[]Tag              "json:\"tags,omitempty\""
 		Title        *string             "json:\"title,omitempty\""
 		WaitingFor   *string             "json:\"waiting_for,omitempty\""
 	}, len(stats.Bottlenecks))
@@ -337,6 +338,17 @@ func (s *Server) GetDashboardStats(ctx context.Context, request GetDashboardStat
 		resp.Bottlenecks[i].StrategyKind = &b.StrategyKind
 		resp.Bottlenecks[i].WaitingFor = &b.WaitingFor
 		resp.Bottlenecks[i].ActiveSince = &b.ActiveSince
+
+		// Map Tags
+		tags := make([]Tag, len(b.Tags))
+		for j, t := range b.Tags {
+			tags[j] = Tag{
+				Id:    t.ID,
+				Name:  t.Name,
+				Color: t.Color,
+			}
+		}
+		resp.Bottlenecks[i].Tags = &tags
 	}
 
 	// Map Activity
