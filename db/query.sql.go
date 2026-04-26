@@ -1292,9 +1292,9 @@ const listInvites = `-- name: ListInvites :many
 SELECT 
     i.id, i.title, i.description, i."from", i."to", i.duration, i.created_at, i.status, i.from_person_id,
     (SELECT COUNT(*) FROM invite_phases WHERE invite_id = i.id)::int as total_phases,
-    (SELECT COALESCE(ip."order", 0) FROM invite_phases ip 
+    COALESCE((SELECT ip."order" FROM invite_phases ip 
      JOIN invite_phase_state ips ON ip.id = ips.phase_id 
-     WHERE ip.invite_id = i.id AND ips.status = 'active' LIMIT 1)::int as active_phase_order,
+     WHERE ip.invite_id = i.id AND ips.status = 'active' LIMIT 1), 0)::int as active_phase_order,
     (SELECT COUNT(*) FROM invitees WHERE invite_id = i.id AND state = 'accepted')::int as total_accepted,
     (SELECT COUNT(*) FROM invitees WHERE invite_id = i.id)::int as total_invitees
 FROM invites i
