@@ -219,6 +219,7 @@ type Invite struct {
 	FromPersonId openapi_types.UUID `json:"from_person_id"`
 	Id           openapi_types.UUID `json:"id"`
 	Status       InviteStatus       `json:"status"`
+	Tags         *[]Tag             `json:"tags,omitempty"`
 	Title        string             `json:"title"`
 	To           *time.Time         `json:"to,omitempty"`
 }
@@ -290,12 +291,13 @@ type NewGroup struct {
 
 // NewInvite defines model for NewInvite.
 type NewInvite struct {
-	Description  *string            `json:"description,omitempty"`
-	DurationNs   *int               `json:"duration_ns,omitempty"`
-	From         time.Time          `json:"from"`
-	FromPersonId openapi_types.UUID `json:"from_person_id"`
-	Title        string             `json:"title"`
-	To           *time.Time         `json:"to,omitempty"`
+	Description  *string               `json:"description,omitempty"`
+	DurationNs   *int                  `json:"duration_ns,omitempty"`
+	From         time.Time             `json:"from"`
+	FromPersonId openapi_types.UUID    `json:"from_person_id"`
+	TagIds       *[]openapi_types.UUID `json:"tag_ids,omitempty"`
+	Title        string                `json:"title"`
+	To           *time.Time            `json:"to,omitempty"`
 }
 
 // NewInvitePhase defines model for NewInvitePhase.
@@ -313,6 +315,12 @@ type NewPerson struct {
 	Email    openapi_types.Email `json:"email"`
 	Name     string              `json:"name"`
 	Password *string             `json:"password,omitempty"`
+}
+
+// NewTag defines model for NewTag.
+type NewTag struct {
+	Color string `json:"color"`
+	Name  string `json:"name"`
 }
 
 // Person defines model for Person.
@@ -336,6 +344,13 @@ type PublicInviteDetails struct {
 // PublicInviteDetailsCurrentState defines model for PublicInviteDetails.CurrentState.
 type PublicInviteDetailsCurrentState string
 
+// Tag defines model for Tag.
+type Tag struct {
+	Color string             `json:"color"`
+	Id    openapi_types.UUID `json:"id"`
+	Name  string             `json:"name"`
+}
+
 // UpdateGroup defines model for UpdateGroup.
 type UpdateGroup struct {
 	Description *string `json:"description,omitempty"`
@@ -344,13 +359,14 @@ type UpdateGroup struct {
 
 // UpdateInvite defines model for UpdateInvite.
 type UpdateInvite struct {
-	Description  *string             `json:"description,omitempty"`
-	DurationNs   *int                `json:"duration_ns,omitempty"`
-	From         *time.Time          `json:"from,omitempty"`
-	FromPersonId *openapi_types.UUID `json:"from_person_id,omitempty"`
-	Status       *UpdateInviteStatus `json:"status,omitempty"`
-	Title        *string             `json:"title,omitempty"`
-	To           *time.Time          `json:"to,omitempty"`
+	Description  *string               `json:"description,omitempty"`
+	DurationNs   *int                  `json:"duration_ns,omitempty"`
+	From         *time.Time            `json:"from,omitempty"`
+	FromPersonId *openapi_types.UUID   `json:"from_person_id,omitempty"`
+	Status       *UpdateInviteStatus   `json:"status,omitempty"`
+	TagIds       *[]openapi_types.UUID `json:"tag_ids,omitempty"`
+	Title        *string               `json:"title,omitempty"`
+	To           *time.Time            `json:"to,omitempty"`
 }
 
 // UpdateInviteStatus defines model for UpdateInvite.Status.
@@ -361,6 +377,12 @@ type UpdatePerson struct {
 	Email    *openapi_types.Email `json:"email,omitempty"`
 	Name     *string              `json:"name,omitempty"`
 	Password *string              `json:"password,omitempty"`
+}
+
+// UpdateTag defines model for UpdateTag.
+type UpdateTag struct {
+	Color *string `json:"color,omitempty"`
+	Name  *string `json:"name,omitempty"`
 }
 
 // ForgotPasswordJSONBody defines parameters for ForgotPassword.
@@ -415,6 +437,12 @@ type UpdatePersonJSONRequestBody = UpdatePerson
 
 // RespondToInviteJSONRequestBody defines body for RespondToInvite for application/json ContentType.
 type RespondToInviteJSONRequestBody = InviteResponse
+
+// CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
+type CreateTagJSONRequestBody = NewTag
+
+// UpdateTagJSONRequestBody defines body for UpdateTag for application/json ContentType.
+type UpdateTagJSONRequestBody = UpdateTag
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -514,6 +542,21 @@ type ServerInterface interface {
 	// Accept or decline an invite
 	// (POST /respond/{token})
 	RespondToInvite(w http.ResponseWriter, r *http.Request, token openapi_types.UUID)
+	// List all tags
+	// (GET /tags)
+	ListTags(w http.ResponseWriter, r *http.Request)
+	// Create a new tag
+	// (POST /tags)
+	CreateTag(w http.ResponseWriter, r *http.Request)
+	// Delete a tag
+	// (DELETE /tags/{id})
+	DeleteTag(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// Get tag usage count
+	// (GET /tags/{id})
+	GetTagUsage(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// Update a tag
+	// (PATCH /tags/{id})
+	UpdateTag(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -1211,6 +1254,109 @@ func (siw *ServerInterfaceWrapper) RespondToInvite(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListTags operation middleware
+func (siw *ServerInterfaceWrapper) ListTags(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTags(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTag operation middleware
+func (siw *ServerInterfaceWrapper) CreateTag(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTag(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTag operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTag(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTag(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTagUsage operation middleware
+func (siw *ServerInterfaceWrapper) GetTagUsage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTagUsage(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateTag operation middleware
+func (siw *ServerInterfaceWrapper) UpdateTag(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateTag(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1363,6 +1509,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PATCH "+options.BaseURL+"/persons/{id}", wrapper.UpdatePerson)
 	m.HandleFunc("GET "+options.BaseURL+"/respond/{token}", wrapper.GetInviteForResponse)
 	m.HandleFunc("POST "+options.BaseURL+"/respond/{token}", wrapper.RespondToInvite)
+	m.HandleFunc("GET "+options.BaseURL+"/tags", wrapper.ListTags)
+	m.HandleFunc("POST "+options.BaseURL+"/tags", wrapper.CreateTag)
+	m.HandleFunc("DELETE "+options.BaseURL+"/tags/{id}", wrapper.DeleteTag)
+	m.HandleFunc("GET "+options.BaseURL+"/tags/{id}", wrapper.GetTagUsage)
+	m.HandleFunc("PATCH "+options.BaseURL+"/tags/{id}", wrapper.UpdateTag)
 
 	return m
 }
@@ -2084,6 +2235,92 @@ func (response RespondToInvite404Response) VisitRespondToInviteResponse(w http.R
 	return nil
 }
 
+type ListTagsRequestObject struct {
+}
+
+type ListTagsResponseObject interface {
+	VisitListTagsResponse(w http.ResponseWriter) error
+}
+
+type ListTags200JSONResponse []Tag
+
+func (response ListTags200JSONResponse) VisitListTagsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateTagRequestObject struct {
+	Body *CreateTagJSONRequestBody
+}
+
+type CreateTagResponseObject interface {
+	VisitCreateTagResponse(w http.ResponseWriter) error
+}
+
+type CreateTag201JSONResponse Tag
+
+func (response CreateTag201JSONResponse) VisitCreateTagResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteTagRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type DeleteTagResponseObject interface {
+	VisitDeleteTagResponse(w http.ResponseWriter) error
+}
+
+type DeleteTag204Response struct {
+}
+
+func (response DeleteTag204Response) VisitDeleteTagResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type GetTagUsageRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type GetTagUsageResponseObject interface {
+	VisitGetTagUsageResponse(w http.ResponseWriter) error
+}
+
+type GetTagUsage200JSONResponse struct {
+	Count *int `json:"count,omitempty"`
+}
+
+func (response GetTagUsage200JSONResponse) VisitGetTagUsageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateTagRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *UpdateTagJSONRequestBody
+}
+
+type UpdateTagResponseObject interface {
+	VisitUpdateTagResponse(w http.ResponseWriter) error
+}
+
+type UpdateTag200JSONResponse Tag
+
+func (response UpdateTag200JSONResponse) VisitUpdateTagResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Request password reset
@@ -2182,6 +2419,21 @@ type StrictServerInterface interface {
 	// Accept or decline an invite
 	// (POST /respond/{token})
 	RespondToInvite(ctx context.Context, request RespondToInviteRequestObject) (RespondToInviteResponseObject, error)
+	// List all tags
+	// (GET /tags)
+	ListTags(ctx context.Context, request ListTagsRequestObject) (ListTagsResponseObject, error)
+	// Create a new tag
+	// (POST /tags)
+	CreateTag(ctx context.Context, request CreateTagRequestObject) (CreateTagResponseObject, error)
+	// Delete a tag
+	// (DELETE /tags/{id})
+	DeleteTag(ctx context.Context, request DeleteTagRequestObject) (DeleteTagResponseObject, error)
+	// Get tag usage count
+	// (GET /tags/{id})
+	GetTagUsage(ctx context.Context, request GetTagUsageRequestObject) (GetTagUsageResponseObject, error)
+	// Update a tag
+	// (PATCH /tags/{id})
+	UpdateTag(ctx context.Context, request UpdateTagRequestObject) (UpdateTagResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -3107,46 +3359,189 @@ func (sh *strictHandler) RespondToInvite(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// ListTags operation middleware
+func (sh *strictHandler) ListTags(w http.ResponseWriter, r *http.Request) {
+	var request ListTagsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTags(ctx, request.(ListTagsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTags")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTagsResponseObject); ok {
+		if err := validResponse.VisitListTagsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateTag operation middleware
+func (sh *strictHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
+	var request CreateTagRequestObject
+
+	var body CreateTagJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateTag(ctx, request.(CreateTagRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateTag")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateTagResponseObject); ok {
+		if err := validResponse.VisitCreateTagResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteTag operation middleware
+func (sh *strictHandler) DeleteTag(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request DeleteTagRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteTag(ctx, request.(DeleteTagRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteTag")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteTagResponseObject); ok {
+		if err := validResponse.VisitDeleteTagResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTagUsage operation middleware
+func (sh *strictHandler) GetTagUsage(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request GetTagUsageRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTagUsage(ctx, request.(GetTagUsageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTagUsage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTagUsageResponseObject); ok {
+		if err := validResponse.VisitGetTagUsageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateTag operation middleware
+func (sh *strictHandler) UpdateTag(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request UpdateTagRequestObject
+
+	request.Id = id
+
+	var body UpdateTagJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateTag(ctx, request.(UpdateTagRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateTag")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateTagResponseObject); ok {
+		if err := validResponse.VisitUpdateTagResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
