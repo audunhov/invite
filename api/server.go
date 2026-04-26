@@ -137,9 +137,15 @@ func (s *Server) Login(ctx context.Context, request LoginRequestObject) (LoginRe
 }
 
 func (s *Server) Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error) {
-	sessionID, ok := ctx.Value(sessionIDContextKey).(uuid.UUID)
+	person, ok := ctx.Value(personContextKey).(models.Person)
 	if ok {
-		s.Queries.DeleteSession(ctx, sessionID)
+		sessionID, ok := ctx.Value(sessionIDContextKey).(uuid.UUID)
+		if ok {
+			s.Queries.DeleteSession(ctx, db.DeleteSessionParams{
+				ID:       sessionID,
+				PersonID: person.ID,
+			})
+		}
 	}
 	return LogoutSuccessResponse{}, nil
 }
@@ -1249,9 +1255,48 @@ func (s *Server) RespondToInvite(ctx context.Context, request RespondToInviteReq
 }
 
 func (s *Server) ListSessions(ctx context.Context, request ListSessionsRequestObject) (ListSessionsResponseObject, error) {
-	return nil, errors.New("not implemented")
+	person, ok := ctx.Value(personContextKey).(models.Person)
+	if !ok {
+		return ListSessions401Response{}, nil
+	}
+
+	sessionID, _ := ctx.Value(sessionIDContextKey).(uuid.UUID)
+
+	sessions, err := s.Queries.ListSessionsByPerson(ctx, person.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make([]Session, len(sessions))
+	for i, sess := range sessions {
+		isCurrent := sess.ID == sessionID
+		res[i] = Session{
+			Id:        sess.ID,
+			CreatedAt: sess.CreatedAt,
+			ExpiresAt: sess.ExpiresAt,
+			IsCurrent: &isCurrent,
+		}
+	}
+
+	return ListSessions200JSONResponse(res), nil
 }
 
 func (s *Server) DeleteSession(ctx context.Context, request DeleteSessionRequestObject) (DeleteSessionResponseObject, error) {
-	return nil, errors.New("not implemented")
+	person, ok := ctx.Value(personContextKey).(models.Person)
+	if !ok {
+		return DeleteSession401Response{}, nil
+	}
+
+	err := s.Queries.DeleteSession(ctx, db.DeleteSessionParams{
+		ID:       request.Id,
+		PersonID: person.ID,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DeleteSession404Response{}, nil
+		}
+		return nil, err
+	}
+
+	return DeleteSession204Response{}, nil
 }

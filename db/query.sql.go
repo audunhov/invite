@@ -396,11 +396,16 @@ func (q *Queries) DeletePhaseState(ctx context.Context, phaseID uuid.UUID) error
 }
 
 const deleteSession = `-- name: DeleteSession :exec
-DELETE FROM sessions WHERE id = $1
+DELETE FROM sessions WHERE id = $1 AND person_id = $2
 `
 
-func (q *Queries) DeleteSession(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, deleteSession, id)
+type DeleteSessionParams struct {
+	ID       uuid.UUID `json:"id"`
+	PersonID uuid.UUID `json:"person_id"`
+}
+
+func (q *Queries) DeleteSession(ctx context.Context, arg DeleteSessionParams) error {
+	_, err := q.db.ExecContext(ctx, deleteSession, arg.ID, arg.PersonID)
 	return err
 }
 

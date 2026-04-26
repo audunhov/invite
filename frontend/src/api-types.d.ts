@@ -644,6 +644,7 @@ export interface components {
             expires_at: string;
             /** Format: date-time */
             created_at: string;
+            is_current?: boolean;
         };
         NewTag: {
             name: string;

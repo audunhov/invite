@@ -264,7 +264,7 @@ WHERE person_id = $1
 ORDER BY created_at DESC;
 
 -- name: DeleteSession :exec
-DELETE FROM sessions WHERE id = $1;
+DELETE FROM sessions WHERE id = $1 AND person_id = $2;
 
 -- name: CountAdmins :one
 SELECT COUNT(*) FROM persons WHERE password_hash IS NOT NULL;

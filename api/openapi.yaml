@@ -1093,6 +1093,8 @@ components:
         created_at:
           type: string
           format: date-time
+        is_current:
+          type: boolean
     NewTag:
       type: object
       required: [name, color]
