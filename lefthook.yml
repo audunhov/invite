@@ -1,0 +1,14 @@
+pre-commit:
+  parallel: true
+  commands:
+    go-generate:
+      glob: "*.go|*.sql|*.yaml"
+      run: sqlc generate && cd api && go generate ./...
+    
+    go-build:
+      glob: "*.go"
+      run: go build ./...
+      
+    frontend-type-check:
+      glob: "frontend/**/*.{ts,vue,json}|api/openapi.yaml"
+      run: cd frontend && npm run generate-api && npm run type-check

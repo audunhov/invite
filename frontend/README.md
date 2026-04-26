@@ -1,5 +1,15 @@
 # frontend
 
+## Pre-commit Hooks
+
+This project uses [Lefthook](https://github.com/evilmartians/lefthook) to ensure code quality before commits.
+
+**Installation:**
+```bash
+go install github.com/evilmartians/lefthook@latest
+lefthook install
+```
+
 This template should help get you started developing with Vue 3 in Vite.
 
 ## Recommended IDE Setup
