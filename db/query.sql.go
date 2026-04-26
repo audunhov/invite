@@ -289,6 +289,28 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 	return i, err
 }
 
+const createTag = `-- name: CreateTag :one
+INSERT INTO tags (id, name, color) VALUES ($1, $2, $3) RETURNING id, name, color, created_at
+`
+
+type CreateTagParams struct {
+	ID    uuid.UUID `json:"id"`
+	Name  string    `json:"name"`
+	Color string    `json:"color"`
+}
+
+func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, createTag, arg.ID, arg.Name, arg.Color)
+	var i Tag
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Color,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const deleteGroup = `-- name: DeleteGroup :exec
 DELETE FROM groups WHERE id = $1
 `
@@ -355,6 +377,15 @@ DELETE FROM sessions WHERE id = $1
 
 func (q *Queries) DeleteSession(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, deleteSession, id)
+	return err
+}
+
+const deleteTag = `-- name: DeleteTag :exec
+DELETE FROM tags WHERE id = $1
+`
+
+func (q *Queries) DeleteTag(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteTag, id)
 	return err
 }
 
@@ -1002,6 +1033,67 @@ func (q *Queries) GetSession(ctx context.Context, id uuid.UUID) (GetSessionRow, 
 	return i, err
 }
 
+const getTag = `-- name: GetTag :one
+SELECT id, name, color, created_at FROM tags WHERE id = $1
+`
+
+func (q *Queries) GetTag(ctx context.Context, id uuid.UUID) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, getTag, id)
+	var i Tag
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Color,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getTagUsageCount = `-- name: GetTagUsageCount :one
+SELECT COUNT(*) FROM invite_tags WHERE tag_id = $1
+`
+
+func (q *Queries) GetTagUsageCount(ctx context.Context, tagID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getTagUsageCount, tagID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getTagsByInvite = `-- name: GetTagsByInvite :many
+SELECT t.id, t.name, t.color, t.created_at FROM tags t
+JOIN invite_tags it ON t.id = it.tag_id
+WHERE it.invite_id = $1
+`
+
+func (q *Queries) GetTagsByInvite(ctx context.Context, inviteID uuid.UUID) ([]Tag, error) {
+	rows, err := q.db.QueryContext(ctx, getTagsByInvite, inviteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Tag
+	for rows.Next() {
+		var i Tag
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Color,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGroupMembers = `-- name: ListGroupMembers :many
 SELECT p.id, p.email, p.name, p.password_hash, p.password_reset_token, p.password_reset_expires_at FROM persons p
 JOIN group_members gm ON p.id = gm.contact_id
@@ -1169,6 +1261,38 @@ func (q *Queries) ListPersons(ctx context.Context) ([]Person, error) {
 	return items, nil
 }
 
+const listTags = `-- name: ListTags :many
+SELECT id, name, color, created_at FROM tags ORDER BY name ASC
+`
+
+func (q *Queries) ListTags(ctx context.Context) ([]Tag, error) {
+	rows, err := q.db.QueryContext(ctx, listTags)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Tag
+	for rows.Next() {
+		var i Tag
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Color,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeGroupMember = `-- name: RemoveGroupMember :exec
 DELETE FROM group_members WHERE group_id = $1 AND contact_id = $2
 `
@@ -1232,6 +1356,15 @@ type RespondToInviteParams struct {
 
 func (q *Queries) RespondToInvite(ctx context.Context, arg RespondToInviteParams) error {
 	_, err := q.db.ExecContext(ctx, respondToInvite, arg.MagicToken, arg.State)
+	return err
+}
+
+const setInviteTags = `-- name: SetInviteTags :exec
+DELETE FROM invite_tags WHERE invite_id = $1
+`
+
+func (q *Queries) SetInviteTags(ctx context.Context, inviteID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, setInviteTags, inviteID)
 	return err
 }
 
@@ -1418,4 +1551,26 @@ func (q *Queries) UpdatePhaseState(ctx context.Context, arg UpdatePhaseStatePara
 		arg.Data,
 	)
 	return err
+}
+
+const updateTag = `-- name: UpdateTag :one
+UPDATE tags SET name = $2, color = $3 WHERE id = $1 RETURNING id, name, color, created_at
+`
+
+type UpdateTagParams struct {
+	ID    uuid.UUID `json:"id"`
+	Name  string    `json:"name"`
+	Color string    `json:"color"`
+}
+
+func (q *Queries) UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, updateTag, arg.ID, arg.Name, arg.Color)
+	var i Tag
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Color,
+		&i.CreatedAt,
+	)
+	return i, err
 }

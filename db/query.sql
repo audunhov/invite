@@ -283,3 +283,31 @@ SELECT
     (SELECT COUNT(*) FROM email_logs WHERE status = 'failed' AND created_at > NOW() - INTERVAL '30 days')::int as failed_emails,
     COALESCE((SELECT (COUNT(CASE WHEN state = 'accepted' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0))::float 
      FROM invitees WHERE created_at > NOW() - INTERVAL '30 days'), 0.0)::float as success_rate;
+
+-- name: ListTags :many
+SELECT * FROM tags ORDER BY name ASC;
+
+-- name: GetTag :one
+SELECT * FROM tags WHERE id = $1;
+
+-- name: CreateTag :one
+INSERT INTO tags (id, name, color) VALUES ($1, $2, $3) RETURNING *;
+
+-- name: UpdateTag :one
+UPDATE tags SET name = $2, color = $3 WHERE id = $1 RETURNING *;
+
+-- name: DeleteTag :exec
+DELETE FROM tags WHERE id = $1;
+
+-- name: GetTagUsageCount :one
+SELECT COUNT(*) FROM invite_tags WHERE tag_id = $1;
+
+-- name: SetInviteTags :exec
+DELETE FROM invite_tags WHERE invite_id = $1;
+INSERT INTO invite_tags (invite_id, tag_id)
+SELECT $1, unnest($2::uuid[]);
+
+-- name: GetTagsByInvite :many
+SELECT t.* FROM tags t
+JOIN invite_tags it ON t.id = it.tag_id
+WHERE it.invite_id = $1;

@@ -64,6 +64,11 @@ type InvitePhaseState struct {
 	Data        json.RawMessage `json:"data"`
 }
 
+type InviteTag struct {
+	InviteID uuid.UUID `json:"invite_id"`
+	TagID    uuid.UUID `json:"tag_id"`
+}
+
 type Invitee struct {
 	ID         uuid.UUID     `json:"id"`
 	InviteID   uuid.UUID     `json:"invite_id"`
@@ -87,5 +92,12 @@ type Session struct {
 	ID        uuid.UUID `json:"id"`
 	PersonID  uuid.UUID `json:"person_id"`
 	ExpiresAt time.Time `json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Tag struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Color     string    `json:"color"`
 	CreatedAt time.Time `json:"created_at"`
 }
