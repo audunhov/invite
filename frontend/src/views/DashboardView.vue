@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import type { components } from '../api-types'
+import { client } from '../utils/api'
 import { notify } from '../utils/toast'
 import TableSkeleton from '../components/TableSkeleton.vue'
 
@@ -15,13 +16,16 @@ let refreshInterval: number | null = null
 
 async function fetchStats() {
   try {
-    const res = await fetch('/api/dashboard/stats')
-    if (res.status === 401) {
+    const { data, error: apiError, response } = await client.GET('/dashboard/stats')
+    if (response.status === 401) {
       router.push('/login')
       return
     }
-    if (!res.ok) throw new Error('Failed to fetch dashboard stats')
-    stats.value = await res.json()
+    if (apiError || !data) {
+      error.value = 'Failed to fetch dashboard stats'
+      return
+    }
+    stats.value = data
   } catch (err) {
     console.error(err)
     error.value = err instanceof Error ? err.message : 'Unknown error'

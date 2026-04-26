@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { components } from '../api-types'
+import { client } from '../utils/api'
 
 type Person = components['schemas']['Person']
 
@@ -11,15 +12,15 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function checkAuth() {
     try {
-      const response = await fetch('/api/auth/me')
-      if (response.ok) {
-        user.value = await response.json()
+      const { data, error } = await client.GET('/auth/me')
+      if (!error && data) {
+        user.value = data
         isAuthenticated.value = true
       } else {
         user.value = null
         isAuthenticated.value = false
       }
-    } catch (err) {
+    } catch {
       user.value = null
       isAuthenticated.value = false
     } finally {
@@ -29,17 +30,22 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function login(credentials: Record<string, string>) {
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials),
+    if (!credentials.email || !credentials.password) {
+      throw new Error('Email and password are required')
+    }
+
+    const { error, response } = await client.POST('/auth/login', {
+      body: {
+        email: credentials.email,
+        password: credentials.password,
+      },
     })
 
-    if (!response.ok) {
+    if (error) {
       if (response.status === 401) {
         throw new Error('Invalid email or password')
       }
-      const errData = await response.json().catch(() => ({}))
+      const errData = error as any
       throw new Error(errData.message || 'Login failed')
     }
 
@@ -49,7 +55,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout() {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' })
+      await client.POST('/auth/logout')
     } finally {
       user.value = null
       isAuthenticated.value = false
