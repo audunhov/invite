@@ -18,6 +18,7 @@ import {
 
 type Tag = components['schemas']['Tag']
 type NewTag = components['schemas']['NewTag']
+type Session = components['schemas']['Session']
 
 const auth = useAuthStore()
 const { confirm } = useConfirm()
@@ -32,6 +33,7 @@ const tabs = [
 ]
 
 // Profile Logic
+// ... (unchanged)
 const isSavingProfile = ref(false)
 const profileForm = reactive({
   name: auth.user?.name || '',
@@ -91,6 +93,44 @@ async function updatePassword() {
     // Error handled by middleware
   } finally {
     isSavingPassword.value = false
+  }
+}
+
+// Active Sessions Logic
+const sessions = ref<Session[]>([])
+const isLoadingSessions = ref(false)
+
+async function fetchSessions() {
+  isLoadingSessions.value = true
+  try {
+    const { data, error } = await client.GET('/auth/sessions')
+    if (error) throw error
+    if (data) sessions.value = data
+  } catch (err) {
+    // Error handled by middleware
+  } finally {
+    isLoadingSessions.value = false
+  }
+}
+
+async function revokeSession(session: Session) {
+  const confirmed = await confirm({
+    title: 'Revoke Session',
+    message: 'Are you sure you want to revoke this session? You will be logged out on that device.',
+    variant: 'danger',
+    confirmLabel: 'Revoke',
+  })
+  if (!confirmed) return
+
+  try {
+    const { error } = await client.DELETE('/auth/sessions/{id}', {
+      params: { path: { id: session.id } },
+    })
+    if (error) throw error
+    notify.success('Session revoked')
+    await fetchSessions()
+  } catch (err) {
+    // Error handled by middleware
   }
 }
 
@@ -192,8 +232,21 @@ async function deleteTag(tag: Tag) {
   }
 }
 
+function selectTab(tabId: string) {
+  currentTab.value = tabId
+  if (tabId === 'tags') {
+    fetchTags()
+  } else if (tabId === 'security') {
+    fetchSessions()
+  }
+}
+
 onMounted(() => {
-  fetchTags()
+  if (currentTab.value === 'tags') {
+    fetchTags()
+  } else if (currentTab.value === 'security') {
+    fetchSessions()
+  }
 })
 </script>
 
@@ -204,7 +257,7 @@ onMounted(() => {
         <button
           v-for="tab in tabs"
           :key="tab.id"
-          @click="currentTab = tab.id"
+          @click="selectTab(tab.id)"
           :class="[
             currentTab === tab.id
               ? 'bg-gray-50 text-indigo-700 hover:bg-white dark:bg-white/5 dark:text-white'
@@ -329,7 +382,7 @@ onMounted(() => {
       </section>
 
       <!-- Security Section -->
-      <section v-if="currentTab === 'security'">
+      <section v-if="currentTab === 'security'" class="space-y-6">
         <form @submit.prevent="updatePassword">
           <div class="shadow sm:overflow-hidden sm:rounded-md border border-gray-200 dark:border-white/10">
             <div class="bg-white px-4 py-5 dark:bg-gray-800 sm:p-6">
@@ -371,6 +424,44 @@ onMounted(() => {
             </div>
           </div>
         </form>
+
+        <div class="shadow sm:overflow-hidden sm:rounded-md border border-gray-200 dark:border-white/10">
+          <div class="bg-white px-4 py-5 dark:bg-gray-800 sm:p-6">
+            <div>
+              <h3 class="text-base font-semibold text-gray-900 dark:text-white">Active Sessions</h3>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage your active sessions and log out from other devices.</p>
+            </div>
+
+            <div class="mt-6">
+              <div v-if="isLoadingSessions" class="flex justify-center py-4">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
+              </div>
+              <ul v-else class="divide-y divide-gray-200 dark:divide-white/5 border-t dark:border-white/5">
+                <li v-for="session in sessions" :key="session.id" class="py-4 flex items-center justify-between">
+                  <div class="flex items-center">
+                    <ComputerDesktopIcon class="size-6 text-gray-400 mr-3" />
+                    <div>
+                      <p class="text-sm font-medium text-gray-900 dark:text-white flex items-center">
+                        {{ session.is_current ? 'Current Session' : 'Other Session' }}
+                        <span v-if="session.is_current" class="ml-2 inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20 dark:bg-green-500/10 dark:text-green-400 dark:ring-green-500/20">Active</span>
+                      </p>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Started on {{ new Date(session.created_at).toLocaleString() }}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    v-if="!session.is_current"
+                    @click="revokeSession(session)"
+                    class="text-sm font-medium text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    Revoke
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- Tags Section -->
