@@ -28,6 +28,7 @@ import (
 	"invite/internal/app"
 	"invite/internal/limiter"
 	"invite/internal/logging"
+	"invite/internal/seed"
 )
 
 func main() {
@@ -55,6 +56,16 @@ func main() {
 	}
 
 	queries := db.New(dbConn)
+
+	// Check for subcommand
+	if len(os.Args) > 1 && os.Args[1] == "seed" {
+		if err := seed.Run(ctx, dbConn, queries); err != nil {
+			slog.Error("Failed to seed database", slog.Any("error", err))
+			os.Exit(1)
+		}
+		return
+	}
+
 	emailService := email.NewService(cfg)
 	application := app.New(dbConn, queries, emailService)
 
