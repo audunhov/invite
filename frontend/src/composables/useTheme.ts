@@ -20,17 +20,25 @@ export function useTheme() {
     }
   }
 
+  // Apply immediately on init
+  applyTheme(theme.value)
+
   watchEffect(() => {
     localStorage.setItem('theme', theme.value)
     applyTheme(theme.value)
   })
 
-  // Listen for system theme changes if set to system
+  // Listen for system theme changes
   onMounted(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    const listener = () => {
+    const listener = (e: MediaQueryListEvent) => {
       if (theme.value === 'system') {
-        applyTheme('system')
+        const root = document.documentElement
+        if (e.matches) {
+          root.classList.add('dark')
+        } else {
+          root.classList.remove('dark')
+        }
       }
     }
     mediaQuery.addEventListener('change', listener)

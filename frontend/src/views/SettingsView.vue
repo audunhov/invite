@@ -260,7 +260,7 @@ onMounted(() => {
           @click="selectTab(tab.id)"
           :class="[
             currentTab === tab.id
-              ? 'bg-gray-50 text-indigo-700 hover:bg-white dark:bg-white/5 dark:text-white'
+              ? 'bg-gray-50 text-indigo-700 dark:bg-white/10 dark:text-white'
               : 'text-gray-900 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white',
             'group flex items-center rounded-md px-3 py-2 text-sm font-medium w-full text-left',
           ]"
