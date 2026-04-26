@@ -313,3 +313,22 @@ SELECT $1, unnest($2::uuid[]);
 SELECT t.* FROM tags t
 JOIN invite_tags it ON t.id = it.tag_id
 WHERE it.invite_id = $1;
+
+-- name: GetTimelineData :many
+SELECT 
+    i.id as invite_id,
+    i.title,
+    i.status as invite_status,
+    ip.id as phase_id,
+    ip."order" as phase_order,
+    COALESCE(ips.status, 'pending') as phase_status,
+    COUNT(CASE WHEN ite.state = 'accepted' THEN 1 END)::int as accepted_count,
+    COUNT(CASE WHEN ite.state = 'declined' THEN 1 END)::int as declined_count,
+    COUNT(ite.id)::int as total_invitees
+FROM invites i
+JOIN invite_phases ip ON i.id = ip.invite_id
+LEFT JOIN invite_phase_state ips ON ip.id = ips.phase_id
+LEFT JOIN invitees ite ON ip.id = ite.phase_id
+WHERE i.status IN ('active', 'completed')
+GROUP BY i.id, ip.id, ips.status
+ORDER BY i.created_at DESC, ip."order" ASC;

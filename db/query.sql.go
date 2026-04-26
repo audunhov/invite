@@ -1118,6 +1118,71 @@ func (q *Queries) GetTagsByInvite(ctx context.Context, inviteID uuid.UUID) ([]Ta
 	return items, nil
 }
 
+const getTimelineData = `-- name: GetTimelineData :many
+SELECT 
+    i.id as invite_id,
+    i.title,
+    i.status as invite_status,
+    ip.id as phase_id,
+    ip."order" as phase_order,
+    COALESCE(ips.status, 'pending') as phase_status,
+    COUNT(CASE WHEN ite.state = 'accepted' THEN 1 END)::int as accepted_count,
+    COUNT(CASE WHEN ite.state = 'declined' THEN 1 END)::int as declined_count,
+    COUNT(ite.id)::int as total_invitees
+FROM invites i
+JOIN invite_phases ip ON i.id = ip.invite_id
+LEFT JOIN invite_phase_state ips ON ip.id = ips.phase_id
+LEFT JOIN invitees ite ON ip.id = ite.phase_id
+WHERE i.status IN ('active', 'completed')
+GROUP BY i.id, ip.id, ips.status
+ORDER BY i.created_at DESC, ip."order" ASC
+`
+
+type GetTimelineDataRow struct {
+	InviteID      uuid.UUID `json:"invite_id"`
+	Title         string    `json:"title"`
+	InviteStatus  string    `json:"invite_status"`
+	PhaseID       uuid.UUID `json:"phase_id"`
+	PhaseOrder    int32     `json:"phase_order"`
+	PhaseStatus   string    `json:"phase_status"`
+	AcceptedCount int32     `json:"accepted_count"`
+	DeclinedCount int32     `json:"declined_count"`
+	TotalInvitees int32     `json:"total_invitees"`
+}
+
+func (q *Queries) GetTimelineData(ctx context.Context) ([]GetTimelineDataRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTimelineData)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTimelineDataRow
+	for rows.Next() {
+		var i GetTimelineDataRow
+		if err := rows.Scan(
+			&i.InviteID,
+			&i.Title,
+			&i.InviteStatus,
+			&i.PhaseID,
+			&i.PhaseOrder,
+			&i.PhaseStatus,
+			&i.AcceptedCount,
+			&i.DeclinedCount,
+			&i.TotalInvitees,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGroupMembers = `-- name: ListGroupMembers :many
 SELECT p.id, p.email, p.name, p.password_hash, p.password_reset_token, p.password_reset_expires_at FROM persons p
 JOIN group_members gm ON p.id = gm.contact_id

@@ -68,12 +68,48 @@ func (app *App) GetDashboardStats(ctx context.Context) (*models.DashboardStats, 
 		})
 	}
 
+	// 4. Fetch Timeline Data
+	timelineRows, err := app.Queries.GetTimelineData(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch timeline data: %w", err)
+	}
+
+	timelineMap := make(map[uuid.UUID]*models.TimelineInvite)
+	timelineOrder := []uuid.UUID{}
+
+	for _, row := range timelineRows {
+		if _, exists := timelineMap[row.InviteID]; !exists {
+			invite := &models.TimelineInvite{
+				ID:     row.InviteID,
+				Title:  row.Title,
+				Status: row.InviteStatus,
+				Phases: []models.TimelinePhase{},
+			}
+			timelineMap[row.InviteID] = invite
+			timelineOrder = append(timelineOrder, row.InviteID)
+		}
+
+		timelineMap[row.InviteID].Phases = append(timelineMap[row.InviteID].Phases, models.TimelinePhase{
+			Order:         int(row.PhaseOrder),
+			Status:        row.PhaseStatus,
+			AcceptedCount: int(row.AcceptedCount),
+			DeclinedCount: int(row.DeclinedCount),
+			TotalInvitees: int(row.TotalInvitees),
+		})
+	}
+
+	timeline := make([]models.TimelineInvite, len(timelineOrder))
+	for i, id := range timelineOrder {
+		timeline[i] = *timelineMap[id]
+	}
+
 	return &models.DashboardStats{
 		Stats: models.GlobalStats{
 			ActiveInvites: int(dbStats.ActiveInvites),
 			FailedEmails:  int(dbStats.FailedEmails),
 			SuccessRate:   dbStats.SuccessRate,
 		},
+		Timeline:    timeline,
 		Bottlenecks: bottlenecks,
 		Activity:    activity,
 	}, nil

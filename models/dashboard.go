@@ -8,8 +8,24 @@ import (
 
 type DashboardStats struct {
 	Stats       GlobalStats      `json:"stats"`
+	Timeline    []TimelineInvite `json:"timeline"`
 	Bottlenecks []Bottleneck     `json:"bottlenecks"`
 	Activity    []RecentActivity `json:"activity"`
+}
+
+type TimelineInvite struct {
+	ID     uuid.UUID       `json:"id"`
+	Title  string          `json:"title"`
+	Status string          `json:"status"`
+	Phases []TimelinePhase `json:"phases"`
+}
+
+type TimelinePhase struct {
+	Order         int    `json:"order"`
+	Status        string `json:"status"`
+	AcceptedCount int    `json:"accepted_count"`
+	DeclinedCount int    `json:"declined_count"`
+	TotalInvitees int    `json:"total_invitees"`
 }
 
 type GlobalStats struct {

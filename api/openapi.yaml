@@ -988,7 +988,27 @@ components:
           properties:
             active_invites: { type: integer }
             failed_emails: { type: integer }
-            success_rate: { type: number }
+            success_rate: { type: number, format: float }
+        timeline:
+          type: array
+          items:
+            type: object
+            required: [id, title, status, phases]
+            properties:
+              id: { type: string, format: uuid }
+              title: { type: string }
+              status: { type: string }
+              phases:
+                type: array
+                items:
+                  type: object
+                  required: [order, status, accepted_count, declined_count, total_invitees]
+                  properties:
+                    order: { type: integer }
+                    status: { type: string }
+                    accepted_count: { type: integer }
+                    declined_count: { type: integer }
+                    total_invitees: { type: integer }
         bottlenecks:
           type: array
           items:

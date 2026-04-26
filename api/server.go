@@ -319,6 +319,41 @@ func (s *Server) GetDashboardStats(ctx context.Context, request GetDashboardStat
 	resp.Stats.FailedEmails = &stats.Stats.FailedEmails
 	resp.Stats.SuccessRate = toFloat32Ptr(stats.Stats.SuccessRate)
 
+	// Map Timeline
+	timeline := make([]struct {
+		Id     openapi_types.UUID `json:"id"`
+		Phases []struct {
+			AcceptedCount int    `json:"accepted_count"`
+			DeclinedCount int    `json:"declined_count"`
+			Order         int    `json:"order"`
+			Status        string `json:"status"`
+			TotalInvitees int    `json:"total_invitees"`
+		} `json:"phases"`
+		Status string `json:"status"`
+		Title  string `json:"title"`
+	}, len(stats.Timeline))
+
+	for i, t := range stats.Timeline {
+		timeline[i].Id = t.ID
+		timeline[i].Title = t.Title
+		timeline[i].Status = t.Status
+		timeline[i].Phases = make([]struct {
+			AcceptedCount int    `json:"accepted_count"`
+			DeclinedCount int    `json:"declined_count"`
+			Order         int    `json:"order"`
+			Status        string `json:"status"`
+			TotalInvitees int    `json:"total_invitees"`
+		}, len(t.Phases))
+		for j, p := range t.Phases {
+			timeline[i].Phases[j].Order = p.Order
+			timeline[i].Phases[j].Status = p.Status
+			timeline[i].Phases[j].AcceptedCount = p.AcceptedCount
+			timeline[i].Phases[j].DeclinedCount = p.DeclinedCount
+			timeline[i].Phases[j].TotalInvitees = p.TotalInvitees
+		}
+	}
+	resp.Timeline = &timeline
+
 	// Map Bottlenecks
 	resp.Bottlenecks = make([]struct {
 		ActiveSince  *time.Time          "json:\"active_since,omitempty\""

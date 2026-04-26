@@ -553,8 +553,22 @@ export interface components {
             stats: {
                 active_invites?: number;
                 failed_emails?: number;
+                /** Format: float */
                 success_rate?: number;
             };
+            timeline?: {
+                /** Format: uuid */
+                id: string;
+                title: string;
+                status: string;
+                phases: {
+                    order: number;
+                    status: string;
+                    accepted_count: number;
+                    declined_count: number;
+                    total_invitees: number;
+                }[];
+            }[];
             bottlenecks: {
                 /** Format: uuid */
                 invite_id?: string;

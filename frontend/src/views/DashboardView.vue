@@ -99,6 +99,52 @@ function goToInvites() {
       </div>
     </div>
 
+    <!-- Process Timeline -->
+    <div v-if="stats && stats.timeline && stats.timeline.length > 0" class="space-y-4">
+      <h3 class="text-lg font-medium text-gray-900 dark:text-white">Process Timeline</h3>
+      <div class="bg-white dark:bg-white/5 shadow rounded-lg border border-gray-200 dark:border-white/10 overflow-hidden">
+        <div class="p-6 overflow-x-auto">
+          <div class="min-w-[600px] space-y-6">
+            <div v-for="invite in stats.timeline" :key="invite.id" class="group">
+              <div class="flex justify-between items-end mb-2">
+                <span class="text-sm font-bold text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 cursor-pointer" @click="goToInvites">
+                  {{ invite.title }}
+                </span>
+                <span class="text-[10px] uppercase font-medium px-2 py-0.5 rounded-full" 
+                  :class="{
+                    'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400': invite.status === 'completed',
+                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400': invite.status === 'active'
+                  }">
+                  {{ invite.status }}
+                </span>
+              </div>
+              <div class="h-4 w-full bg-gray-100 dark:bg-gray-800 rounded-full flex overflow-hidden border dark:border-white/5">
+                <div v-for="phase in invite.phases" :key="phase.order" 
+                     class="h-full border-r last:border-r-0 border-white/20 relative"
+                     :style="{ width: `${100 / invite.phases.length}%` }"
+                     :title="`Phase #${phase.order}: ${phase.accepted_count}/${phase.total_invitees} Accepted`"
+                >
+                  <!-- Base status color -->
+                  <div class="absolute inset-0 transition-all"
+                       :class="{
+                         'bg-emerald-500': phase.status === 'completed',
+                         'bg-indigo-500 animate-pulse': phase.status === 'active',
+                         'bg-gray-300 dark:bg-gray-700': phase.status === 'pending'
+                       }"
+                  ></div>
+                  <!-- Progress overlay (accepted) -->
+                  <div v-if="phase.total_invitees > 0" 
+                       class="absolute inset-y-0 left-0 bg-emerald-600 opacity-40"
+                       :style="{ width: `${(phase.accepted_count / phase.total_invitees) * 100}%` }"
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <!-- Main Area (Bottlenecks) -->
       <div class="lg:col-span-2 space-y-4">
