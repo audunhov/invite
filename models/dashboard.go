@@ -25,6 +25,7 @@ type Bottleneck struct {
 	StrategyKind string    `json:"strategy_kind"`
 	WaitingFor   string    `json:"waiting_for"`
 	ActiveSince  time.Time `json:"active_since"`
+	Tags         []Tag     `json:"tags"`
 }
 
 type RecentActivity struct {

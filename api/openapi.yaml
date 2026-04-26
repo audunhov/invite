@@ -1000,6 +1000,10 @@ components:
               strategy_kind: { type: string }
               waiting_for: { type: string }
               active_since: { type: string, format: date-time }
+              tags:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tag'
         activity:
           type: array
           items:

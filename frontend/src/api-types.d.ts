@@ -564,6 +564,7 @@ export interface components {
                 waiting_for?: string;
                 /** Format: date-time */
                 active_since?: string;
+                tags?: components["schemas"]["Tag"][];
             }[];
             activity: {
                 /** Format: date-time */

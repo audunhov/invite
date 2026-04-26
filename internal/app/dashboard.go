@@ -63,6 +63,7 @@ func (app *App) GetDashboardStats(ctx context.Context) (*models.DashboardStats, 
 			StrategyKind: row.StrategyKind,
 			WaitingFor:   waitingFor,
 			ActiveSince:  row.CreatedAt, // Note: This is invite created_at, not phase active_since. Close enough for now.
+			Tags:         app.getTagsForInvite(ctx, row.InviteID),
 		})
 	}
 
@@ -75,4 +76,21 @@ func (app *App) GetDashboardStats(ctx context.Context) (*models.DashboardStats, 
 		Bottlenecks: bottlenecks,
 		Activity:    activity,
 	}, nil
+}
+
+func (app *App) getTagsForInvite(ctx context.Context, inviteID uuid.UUID) []models.Tag {
+	dbTags, err := app.Queries.GetTagsByInvite(ctx, inviteID)
+	if err != nil {
+		return []models.Tag{}
+	}
+
+	tags := make([]models.Tag, len(dbTags))
+	for i, t := range dbTags {
+		tags[i] = models.Tag{
+			ID:    t.ID,
+			Name:  t.Name,
+			Color: t.Color,
+		}
+	}
+	return tags
 }

@@ -12,12 +12,14 @@ type NewInvitePhase = components['schemas']['NewInvitePhase']
 type InviteStatusReport = components['schemas']['InviteStatusReport']
 type Person = components['schemas']['Person']
 type Group = components['schemas']['Group']
+type Tag = components['schemas']['Tag']
 
 const { confirm } = useConfirm()
 
 const invites = ref<Invite[]>([])
 const persons = ref<Person[]>([])
 const groups = ref<Group[]>([])
+const tags = ref<Tag[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 const startingInvites = reactive<Record<string, boolean>>({})
@@ -32,6 +34,7 @@ const inviteForm = reactive({
   from: new Date(Date.now() + 86400000).toISOString().slice(0, 16), // Tomorrow
   to: '',
   from_person_id: '',
+  tag_ids: [] as string[],
 })
 
 // Phases Modal
@@ -55,15 +58,17 @@ const loadingStatus = ref(false)
 async function fetchData() {
   loading.value = true
   try {
-    const [invitesRes, personsRes, groupsRes] = await Promise.all([
+    const [invitesRes, personsRes, groupsRes, tagsRes] = await Promise.all([
       fetch('/api/invites'),
       fetch('/api/persons'),
-      fetch('/api/groups')
+      fetch('/api/groups'),
+      fetch('/api/tags')
     ])
     if (!invitesRes.ok) throw new Error('Failed to fetch invites')
     invites.value = await invitesRes.json()
     persons.value = await (personsRes.ok ? personsRes.json() : [])
     groups.value = await (groupsRes.ok ? groupsRes.json() : [])
+    tags.value = await (tagsRes.ok ? tagsRes.json() : [])
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error'
   } finally {
@@ -98,12 +103,22 @@ function toggleRecipient(id: string) {
   }
 }
 
+function toggleTag(id: string) {
+  const index = inviteForm.tag_ids.indexOf(id)
+  if (index > -1) {
+    inviteForm.tag_ids.splice(index, 1)
+  } else {
+    inviteForm.tag_ids.push(id)
+  }
+}
+
 function openCreateInviteModal() {
   editingInvite.value = null
   inviteForm.title = ''
   inviteForm.description = ''
   inviteForm.from = new Date(Date.now() + 86400000).toISOString().slice(0, 16)
   inviteForm.to = ''
+  inviteForm.tag_ids = []
   // Default to Tom Cook if found
   const tom = persons.value.find(p => p.email === 'tom@example.com')
   inviteForm.from_person_id = tom ? tom.id : ''
@@ -117,6 +132,7 @@ function openEditInviteModal(invite: Invite) {
   inviteForm.from = new Date(invite.from).toISOString().slice(0, 16)
   inviteForm.to = invite.to ? new Date(invite.to).toISOString().slice(0, 16) : ''
   inviteForm.from_person_id = invite.from_person_id
+  inviteForm.tag_ids = (invite.tags || []).map(t => t.id)
   isInviteModalOpen.value = true
 }
 
@@ -128,6 +144,7 @@ async function saveInvite() {
       description: inviteForm.description,
       from: new Date(inviteForm.from).toISOString(),
       from_person_id: inviteForm.from_person_id,
+      tag_ids: inviteForm.tag_ids,
     }
     if (inviteForm.to) {
       body.to = new Date(inviteForm.to).toISOString()
@@ -389,6 +406,7 @@ onMounted(fetchData)
             <thead>
               <tr>
                 <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-0">Title</th>
+                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Tags</th>
                 <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Status</th>
                 <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Starts At</th>
                 <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-0"><span class="sr-only">Actions</span></th>
@@ -397,6 +415,15 @@ onMounted(fetchData)
             <tbody class="divide-y divide-gray-200 dark:divide-white/5">
               <tr v-for="invite in invites" :key="invite.id">
                 <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 dark:text-white sm:pl-0">{{ invite.title }}</td>
+                <td class="whitespace-nowrap px-3 py-4 text-sm">
+                  <div class="flex flex-wrap gap-1">
+                    <span v-for="tag in invite.tags" :key="tag.id" 
+                      :style="{ backgroundColor: tag.color + '20', color: tag.color, borderColor: tag.color + '40' }"
+                      class="px-2 py-0.5 rounded text-[10px] font-medium border uppercase tracking-wider">
+                      {{ tag.name }}
+                    </span>
+                  </div>
+                </td>
                 <td class="whitespace-nowrap px-3 py-4 text-sm">
                   <span :class="{
                     'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300': invite.status === 'pending',
@@ -442,6 +469,24 @@ onMounted(fetchData)
               <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
                 <textarea v-model="inviteForm.description" rows="2" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border"></textarea>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tags</label>
+                <div class="flex flex-wrap gap-2">
+                  <button v-for="tag in tags" :key="tag.id"
+                    @click="toggleTag(tag.id)"
+                    type="button"
+                    :style="{ 
+                      backgroundColor: inviteForm.tag_ids.includes(tag.id) ? tag.color + '20' : 'transparent',
+                      color: inviteForm.tag_ids.includes(tag.id) ? tag.color : 'inherit',
+                      borderColor: inviteForm.tag_ids.includes(tag.id) ? tag.color : '#d1d5db'
+                    }"
+                    class="px-3 py-1 rounded text-xs font-medium border transition-colors hover:bg-gray-50 dark:hover:bg-gray-700"
+                    :class="inviteForm.tag_ids.includes(tag.id) ? '' : 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600'">
+                    {{ tag.name }}
+                  </button>
+                  <span v-if="tags.length === 0" class="text-xs text-gray-500 italic">No tags defined. Create them in Settings.</span>
+                </div>
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">From</label>

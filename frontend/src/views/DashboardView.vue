@@ -110,7 +110,14 @@ function goToInvites() {
           <div v-for="bn in stats?.bottlenecks" :key="bn.invite_id" 
                class="bg-white dark:bg-white/5 shadow rounded-lg border border-gray-200 dark:border-white/10 p-5 hover:border-indigo-500/50 transition-colors">
             <div class="flex justify-between items-start">
-              <div class="space-y-1">
+              <div class="space-y-2">
+                <div class="flex flex-wrap gap-1">
+                  <span v-for="tag in bn.tags" :key="tag.id" 
+                        class="px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider"
+                        :style="{ backgroundColor: tag.color + '20', color: tag.color, border: '1px solid ' + tag.color + '40' }">
+                    {{ tag.name }}
+                  </span>
+                </div>
                 <h4 class="font-bold text-gray-900 dark:text-white">{{ bn.title }}</h4>
                 <div class="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
                   <span class="px-2 py-0.5 bg-gray-100 dark:bg-white/10 rounded">Phase #{{ bn.phase_order }}</span>
