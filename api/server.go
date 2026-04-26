@@ -1196,6 +1196,7 @@ func (s *Server) GetInviteForResponse(ctx context.Context, request GetInviteForR
 	return GetInviteForResponse200JSONResponse(PublicInviteDetails{
 		InviteId:     invitee.InviteID,
 		Title:        invitee.Title,
+		SenderName:   &invitee.SenderName,
 		Description:  toStringPtr(invitee.InviteDescription),
 		From:         invitee.From,
 		To:           toTimePtr(invitee.To),

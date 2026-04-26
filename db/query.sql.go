@@ -814,9 +814,16 @@ func (q *Queries) GetInvitee(ctx context.Context, id uuid.UUID) (Invitee, error)
 }
 
 const getInviteeByToken = `-- name: GetInviteeByToken :one
-SELECT i.id, i.invite_id, i.contact_id, i.state, i.created_at, i.magic_token, i.phase_id, inv.title, inv.description as invite_description, inv."from", inv."to"
+SELECT 
+    i.id, i.invite_id, i.contact_id, i.state, i.created_at, i.magic_token, i.phase_id, 
+    inv.title, 
+    inv.description as invite_description, 
+    inv."from", 
+    inv."to",
+    p.name as sender_name
 FROM invitees i
 JOIN invites inv ON i.invite_id = inv.id
+JOIN persons p ON inv.from_person_id = p.id
 WHERE i.magic_token = $1
 `
 
@@ -832,6 +839,7 @@ type GetInviteeByTokenRow struct {
 	InviteDescription sql.NullString `json:"invite_description"`
 	From              time.Time      `json:"from"`
 	To                sql.NullTime   `json:"to"`
+	SenderName        string         `json:"sender_name"`
 }
 
 func (q *Queries) GetInviteeByToken(ctx context.Context, magicToken uuid.UUID) (GetInviteeByTokenRow, error) {
@@ -849,6 +857,7 @@ func (q *Queries) GetInviteeByToken(ctx context.Context, magicToken uuid.UUID) (
 		&i.InviteDescription,
 		&i.From,
 		&i.To,
+		&i.SenderName,
 	)
 	return i, err
 }

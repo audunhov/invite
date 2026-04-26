@@ -916,24 +916,16 @@ components:
         phase_order:
           type: integer
           nullable: true
-
     PublicInviteDetails:
       type: object
       required: [invite_id, title, from, current_state]
       properties:
-        invite_id:
-          type: string
-          format: uuid
-        title:
-          type: string
-        description:
-          type: string
-        from:
-          type: string
-          format: date-time
-        to:
-          type: string
-          format: date-time
+        invite_id: { type: string, format: uuid }
+        title: { type: string }
+        sender_name: { type: string }
+        description: { type: string }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
         current_state:
           type: string
           enum: [pending, accepted, declined, expired]

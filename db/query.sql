@@ -199,9 +199,16 @@ VALUES ($1, $2, $3, $4);
 SELECT * FROM invitees WHERE id = $1;
 
 -- name: GetInviteeByToken :one
-SELECT i.*, inv.title, inv.description as invite_description, inv."from", inv."to"
+SELECT 
+    i.*, 
+    inv.title, 
+    inv.description as invite_description, 
+    inv."from", 
+    inv."to",
+    p.name as sender_name
 FROM invitees i
 JOIN invites inv ON i.invite_id = inv.id
+JOIN persons p ON inv.from_person_id = p.id
 WHERE i.magic_token = $1;
 
 -- name: RespondToInvite :exec

@@ -520,6 +520,7 @@ export interface components {
             /** Format: uuid */
             invite_id: string;
             title: string;
+            sender_name?: string;
             description?: string;
             /** Format: date-time */
             from: string;
