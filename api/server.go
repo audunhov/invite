@@ -15,6 +15,7 @@ import (
 	"github.com/oapi-codegen/runtime/types"
 	"invite/db"
 	"invite/email"
+	"invite/internal/app"
 	"invite/internal/auth"
 	"invite/internal/limiter"
 	"invite/models"
@@ -28,6 +29,7 @@ type Server struct {
 	InvalidateInviteFunc      func(ctx context.Context, inviteID uuid.UUID) error
 	InvalidatePhaseFunc       func(ctx context.Context, inviteID uuid.UUID, phaseID uuid.UUID) error
 	GetDashboardStatsFunc    func(ctx context.Context) (*models.DashboardStats, error)
+	CreateInviteDeepFunc     func(ctx context.Context, params app.CreateInviteDeepParams) (*db.Invite, error)
 	Limiter                   *limiter.IPRateLimiter
 	EmailService              *email.Service
 }
@@ -803,7 +805,7 @@ func (s *Server) ListInvites(ctx context.Context, request ListInvitesRequestObje
 }
 
 func (s *Server) CreateInvite(ctx context.Context, request CreateInviteRequestObject) (CreateInviteResponseObject, error) {
-	i, err := s.Queries.CreateInvite(ctx, db.CreateInviteParams{
+	inviteParams := db.CreateInviteParams{
 		ID:           uuid.New(),
 		Title:        request.Body.Title,
 		Description:  fromStringPtr(request.Body.Description),
@@ -813,20 +815,51 @@ func (s *Server) CreateInvite(ctx context.Context, request CreateInviteRequestOb
 		CreatedAt:    time.Now(),
 		Status:       "pending",
 		FromPersonID: uuid.NullUUID{UUID: request.Body.FromPersonId, Valid: true},
-	})
-	if err != nil {
-		return nil, err
 	}
 
-	// Handle tags
-	if request.Body.TagIds != nil && len(*request.Body.TagIds) > 0 {
-		var tagUUIDs []uuid.UUID
+	var tagUUIDs []uuid.UUID
+	if request.Body.TagIds != nil {
 		for _, idStr := range *request.Body.TagIds {
 			u, err := uuid.Parse(idStr.String())
 			if err == nil {
 				tagUUIDs = append(tagUUIDs, u)
 			}
 		}
+	}
+
+	var i db.Invite
+	if request.Body.Phases != nil && len(*request.Body.Phases) > 0 {
+		// Deep Create
+		phaseParams := make([]db.CreateInvitePhaseParams, len(*request.Body.Phases))
+		for idx, p := range *request.Body.Phases {
+			configJSON, _ := json.Marshal(p.StrategyConfig)
+			phaseParams[idx] = db.CreateInvitePhaseParams{
+				ID:             uuid.New(),
+				InviteID:       inviteParams.ID,
+				Order:          int32(p.Order),
+				StrategyKind:   string(p.StrategyKind),
+				StrategyConfig: configJSON,
+			}
+		}
+
+		createdInvite, err := s.CreateInviteDeepFunc(ctx, app.CreateInviteDeepParams{
+			Invite: inviteParams,
+			TagIDs: tagUUIDs,
+			Phases: phaseParams,
+		})
+		if err != nil {
+			return nil, err
+		}
+		i = *createdInvite
+	} else {
+		// Standard Create
+		var err error
+		i, err = s.Queries.CreateInvite(ctx, inviteParams)
+		if err != nil {
+			return nil, err
+		}
+
+		// Handle tags
 		if len(tagUUIDs) > 0 {
 			err = s.Queries.AddInviteTags(ctx, db.AddInviteTagsParams{
 				InviteID: i.ID,

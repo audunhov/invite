@@ -447,6 +447,7 @@ export interface components {
             /** Format: uuid */
             from_person_id: string;
             tag_ids?: string[];
+            phases?: components["schemas"]["NewInvitePhase"][];
         };
         UpdateInvite: {
             title?: string;

@@ -65,6 +65,54 @@ func (app *App) InvitePerson(ctx context.Context, i models.Invite, phase models.
 	}, nil
 }
 
+type CreateInviteDeepParams struct {
+	Invite db.CreateInviteParams
+	TagIDs []uuid.UUID
+	Phases []db.CreateInvitePhaseParams
+}
+
+func (app *App) CreateInviteDeep(ctx context.Context, params CreateInviteDeepParams) (*db.Invite, error) {
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	qtx := app.Queries.WithTx(tx)
+
+	// 1. Create Invite
+	i, err := qtx.CreateInvite(ctx, params.Invite)
+	if err != nil {
+		return nil, fmt.Errorf("creating invite: %w", err)
+	}
+
+	// 2. Add Tags
+	if len(params.TagIDs) > 0 {
+		err = qtx.AddInviteTags(ctx, db.AddInviteTagsParams{
+			InviteID: i.ID,
+			Column2:  params.TagIDs,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("adding tags: %w", err)
+		}
+	}
+
+	// 3. Add Phases
+	for _, p := range params.Phases {
+		p.InviteID = i.ID // Ensure ID matches
+		_, err = qtx.CreateInvitePhase(ctx, p)
+		if err != nil {
+			return nil, fmt.Errorf("creating phase %d: %w", p.Order, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &i, nil
+}
+
 func (app *App) StartInviteProcess(ctx context.Context, inviteID uuid.UUID) error {
 	// 1. Get Invite
 	i, err := app.Queries.GetInvite(ctx, inviteID)

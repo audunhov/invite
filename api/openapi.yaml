@@ -788,6 +788,10 @@ components:
         tag_ids:
           type: array
           items: { type: string, format: uuid }
+        phases:
+          type: array
+          items:
+            $ref: '#/components/schemas/NewInvitePhase'
 
     UpdateInvite:
       type: object

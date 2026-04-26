@@ -14,18 +14,25 @@ test('Golden Path: Login, create invite, and view dashboard', async ({ page }) =
   await page.click('text="Invites"');
   await expect(page.locator('h2:has-text("Invites")')).toBeVisible();
 
-  // 3. Create a new Invite
+  // 3. Create a new Invite (Wizard Step 1)
   await page.click('button:has-text("Create Invite")');
   
-  // Fill out the modal form
   const inviteTitle = `E2E Test Invite ${Date.now()}`;
   await page.fill('#invite-title', inviteTitle);
   await page.fill('#invite-from-at', '2030-01-01T10:00'); // Future date
   
   // Select sender (Admin User from seed data)
-  await page.selectOption('#invite-from-person', { label: 'Admin User (admin@example.com)' });
+  await page.selectOption('#invite-from-person', { label: 'Admin User' });
   
-  await page.click('button:has-text("Save")');
+  await page.click('button:has-text("Continue")');
+
+  // Step 2: Phases
+  await page.check('input[type="checkbox"] >> nth=0'); // Select first person
+  await page.click('button:has-text("Include this Phase")');
+  await page.click('button:has-text("Continue")');
+
+  // Step 3: Review
+  await page.click('button:has-text("Create Process")');
 
   // Verify the invite appears in the list
   await expect(page.locator(`text="${inviteTitle}"`)).toBeVisible();

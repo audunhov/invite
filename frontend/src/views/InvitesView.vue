@@ -25,10 +25,11 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const startingInvites = reactive<Record<string, boolean>>({})
 
-// Invite Modal
+// Invite Modal (Wizard)
 const isInviteModalOpen = ref(false)
 const isSavingInvite = ref(false)
 const editingInvite = ref<Invite | null>(null)
+const wizardStep = ref(1)
 const inviteForm = reactive({
   title: '',
   description: '',
@@ -36,9 +37,17 @@ const inviteForm = reactive({
   to: '',
   from_person_id: '',
   tag_ids: [] as string[],
+  phases: [] as any[], // Draft phases for new invites
 })
 
-// Phases Modal
+// Current phase being added in Step 2
+const draftPhaseForm = reactive({
+  strategy_kind: 'ladder' as 'ladder' | 'sprint',
+  timeout_minutes: 60,
+  selectedRecipientIds: [] as string[],
+})
+
+// Phases Modal (for existing invites)
 const isPhasesModalOpen = ref(false)
 const selectedInviteForPhases = ref<Invite | null>(null)
 const phases = ref<InvitePhase[]>([])
@@ -116,38 +125,111 @@ function toggleTag(id: string) {
 
 function openCreateInviteModal() {
   editingInvite.value = null
+  wizardStep.value = 1
   inviteForm.title = ''
   inviteForm.description = ''
   inviteForm.from = new Date(Date.now() + 86400000).toISOString().slice(0, 16)
   inviteForm.to = ''
   inviteForm.tag_ids = []
-  // Default to Tom Cook if found
-  const tom = persons.value.find(p => p.email === 'tom@example.com')
-  inviteForm.from_person_id = tom ? tom.id : ''
+  inviteForm.phases = []
+  // Default to first person if found
+  const firstPerson = persons.value[0]
+  inviteForm.from_person_id = firstPerson ? firstPerson.id : ''
   isInviteModalOpen.value = true
 }
 
 function openEditInviteModal(invite: Invite) {
   editingInvite.value = invite
+  wizardStep.value = 1 // Basic edit is just Step 1
   inviteForm.title = invite.title
   inviteForm.description = invite.description || ''
   inviteForm.from = new Date(invite.from).toISOString().slice(0, 16)
   inviteForm.to = invite.to ? new Date(invite.to).toISOString().slice(0, 16) : ''
   inviteForm.from_person_id = invite.from_person_id
   inviteForm.tag_ids = (invite.tags || []).map(t => t.id)
+  inviteForm.phases = []
   isInviteModalOpen.value = true
 }
 
+function addDraftPhase() {
+  if (draftPhaseForm.selectedRecipientIds.length === 0) {
+    notify.error('Please select at least one recipient')
+    return
+  }
+
+  let strategy_config: Record<string, any> = {}
+  if (draftPhaseForm.strategy_kind === 'ladder') {
+    const selectedPersons = draftPhaseForm.selectedRecipientIds
+      .map(id => persons.value.find(p => p.id === id))
+      .filter((p): p is Person => !!p)
+
+    strategy_config = {
+      List: selectedPersons,
+      Timeout: draftPhaseForm.timeout_minutes * 60 * 1000000000
+    }
+  } else {
+    strategy_config = {
+      Recipients: draftPhaseForm.selectedRecipientIds,
+      Deadline: new Date(Date.now() + 3600000).toISOString()
+    }
+  }
+
+  inviteForm.phases.push({
+    order: inviteForm.phases.length + 1,
+    strategy_kind: draftPhaseForm.strategy_kind,
+    strategy_config,
+    _display: formatStrategyConfig({ 
+      strategy_kind: draftPhaseForm.strategy_kind, 
+      strategy_config 
+    } as any)
+  })
+
+  // Reset draft form
+  draftPhaseForm.selectedRecipientIds = []
+}
+
+function removeDraftPhase(index: number) {
+  inviteForm.phases.splice(index, 1)
+  // Re-order
+  inviteForm.phases.forEach((p, i) => p.order = i + 1)
+}
+
 async function saveInvite() {
+  if (wizardStep.value === 1 && !editingInvite.value) {
+    if (!inviteForm.title || !inviteForm.from || !inviteForm.from_person_id) {
+      notify.error('Please fill in all required fields')
+      return
+    }
+    wizardStep.value = 2
+    return
+  }
+  if (wizardStep.value === 2 && !editingInvite.value) {
+    if (inviteForm.phases.length === 0) {
+      notify.error('Please add at least one phase')
+      return
+    }
+    wizardStep.value = 3
+    return
+  }
+
   isSavingInvite.value = true
   try {
-    const body = {
+    const body: any = {
       title: inviteForm.title,
       description: inviteForm.description,
       from: new Date(inviteForm.from).toISOString(),
       from_person_id: inviteForm.from_person_id,
       tag_ids: inviteForm.tag_ids,
       to: inviteForm.to ? new Date(inviteForm.to).toISOString() : undefined,
+    }
+
+    // Include phases for deep create
+    if (!editingInvite.value) {
+      body.phases = inviteForm.phases.map(p => ({
+        order: p.order,
+        strategy_kind: p.strategy_kind,
+        strategy_config: p.strategy_config
+      }))
     }
 
     let error: any
@@ -464,21 +546,34 @@ onMounted(fetchData)
       </div>
     </div>
 
-    <!-- Invite Create/Edit Modal -->
+    <!-- Invite Create/Edit Modal (Wizard) -->
     <div v-if="isInviteModalOpen" class="relative z-10" role="dialog" aria-modal="true">
       <div class="fixed inset-0 bg-gray-500/40 backdrop-blur-sm transition-opacity"></div>
       <div class="fixed inset-0 z-10 overflow-y-auto">
         <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-          <div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pt-5 pb-4 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
-            <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">{{ editingInvite ? 'Edit Invite' : 'Create Invite' }}</h3>
-            <div class="mt-4 space-y-4">
+          <div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pt-5 pb-4 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-xl sm:p-6">
+            
+            <div class="flex justify-between items-center mb-6">
+              <h3 class="text-xl font-bold text-gray-900 dark:text-white">
+                {{ editingInvite ? 'Edit Invite' : 'Create Invitation' }}
+              </h3>
+              <div v-if="!editingInvite" class="flex items-center gap-2">
+                <div v-for="step in 3" :key="step" 
+                  class="h-2 w-12 rounded-full transition-colors"
+                  :class="wizardStep >= step ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'"
+                ></div>
+              </div>
+            </div>
+
+            <!-- Step 1: Details -->
+            <div v-if="wizardStep === 1" class="space-y-4">
               <div>
                 <label for="invite-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
-                <input id="invite-title" v-model="inviteForm.title" type="text" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border" />
+                <input id="invite-title" v-model="inviteForm.title" type="text" placeholder="e.g. Annual Design Conference 2026" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border" />
               </div>
               <div>
                 <label for="invite-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-                <textarea id="invite-description" v-model="inviteForm.description" rows="2" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border"></textarea>
+                <textarea id="invite-description" v-model="inviteForm.description" rows="2" placeholder="Tell recipients about the event..." class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border"></textarea>
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tags</label>
@@ -495,30 +590,110 @@ onMounted(fetchData)
                     :class="inviteForm.tag_ids.includes(tag.id) ? '' : 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600'">
                     {{ tag.name }}
                   </button>
-                  <span v-if="tags.length === 0" class="text-xs text-gray-500 italic">No tags defined. Create them in Settings.</span>
                 </div>
               </div>
-              <div>
-                <label for="invite-from-person" class="block text-sm font-medium text-gray-700 dark:text-gray-300">From</label>
-                <select id="invite-from-person" v-model="inviteForm.from_person_id" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border">
-                  <option v-for="p in persons" :key="p.id" :value="p.id">{{ p.name }} ({{ p.email }})</option>
-                </select>
-              </div>
-              <div>
-                <label for="invite-from-at" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Starts At</label>
-                <input id="invite-from-at" v-model="inviteForm.from" type="datetime-local" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border" />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Ends At (Optional)</label>
-                <input v-model="inviteForm.to" type="datetime-local" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border" />
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label for="invite-from-person" class="block text-sm font-medium text-gray-700 dark:text-gray-300">From</label>
+                  <select id="invite-from-person" v-model="inviteForm.from_person_id" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border">
+                    <option v-for="p in persons" :key="p.id" :value="p.id">{{ p.name }}</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="invite-from-at" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Starts At</label>
+                  <input id="invite-from-at" v-model="inviteForm.from" type="datetime-local" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border" />
+                </div>
               </div>
             </div>
-            <div class="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">
-              <button @click="saveInvite" :disabled="isSavingInvite" class="inline-flex w-full justify-center items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50">
-                <LoadingSpinner v-if="isSavingInvite" size="sm" />
-                {{ isSavingInvite ? 'Saving...' : 'Save' }}
-              </button>
-              <button @click="isInviteModalOpen = false" class="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-gray-700 dark:bg-gray-700 dark:text-gray-200">Cancel</button>
+
+            <!-- Step 2: Phases -->
+            <div v-else-if="wizardStep === 2" class="space-y-6">
+              <div v-if="inviteForm.phases.length > 0" class="space-y-2">
+                <p class="text-xs font-bold text-gray-500 uppercase">Workflow Sequence</p>
+                <div v-for="(p, idx) in inviteForm.phases" :key="idx" class="flex items-center justify-between p-3 bg-gray-50 dark:bg-white/5 rounded-lg border dark:border-white/10">
+                  <div class="flex items-center">
+                    <span class="size-6 rounded-full bg-indigo-600 text-white text-[10px] flex items-center justify-center font-bold mr-3">{{ p.order }}</span>
+                    <div>
+                      <p class="text-sm font-bold text-gray-900 dark:text-white uppercase">{{ p.strategy_kind }}</p>
+                      <p class="text-xs text-gray-500">{{ p._display }}</p>
+                    </div>
+                  </div>
+                  <button @click="removeDraftPhase(idx)" class="text-gray-400 hover:text-red-500 transition-colors">
+                    <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                <h4 class="text-sm font-bold text-indigo-900 dark:text-indigo-300 mb-4">Add Process Step</h4>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label class="block text-xs font-medium text-indigo-700 dark:text-indigo-400 uppercase mb-1">Strategy</label>
+                    <select v-model="draftPhaseForm.strategy_kind" class="block w-full rounded-md border-gray-300 dark:bg-gray-800 dark:text-white text-sm p-2 border">
+                      <option value="ladder">Ladder (One by One)</option>
+                      <option value="sprint">Sprint (All at once)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-indigo-700 dark:text-indigo-400 uppercase mb-1">Timeout (min)</label>
+                    <input v-model="draftPhaseForm.timeout_minutes" type="number" class="block w-full rounded-md border-gray-300 dark:bg-gray-800 dark:text-white text-sm p-2 border" />
+                  </div>
+                </div>
+
+                <div class="mb-4">
+                  <label class="block text-xs font-medium text-indigo-700 dark:text-indigo-400 uppercase mb-1">Recipients</label>
+                  <div class="max-h-40 overflow-y-auto border dark:border-white/10 rounded p-2 bg-white dark:bg-gray-900">
+                    <div v-for="p in persons" :key="p.id" class="flex items-center mb-1">
+                      <input type="checkbox" :value="p.id" v-model="draftPhaseForm.selectedRecipientIds" class="mr-2" />
+                      <span class="text-sm">{{ p.name }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button @click="addDraftPhase" class="w-full bg-indigo-600 text-white py-2 rounded-md font-bold text-sm hover:bg-indigo-700 transition-colors">
+                  Include this Phase
+                </button>
+              </div>
+            </div>
+
+            <!-- Step 3: Review -->
+            <div v-else-if="wizardStep === 3" class="space-y-6">
+              <div class="bg-gray-50 dark:bg-white/5 rounded-xl p-6 border dark:border-white/10">
+                <h4 class="text-sm font-bold uppercase text-gray-500 mb-4 tracking-wider">Final Preview</h4>
+                <div class="space-y-4">
+                  <div>
+                    <p class="text-xs text-gray-500 uppercase">Invitation</p>
+                    <p class="text-lg font-bold text-gray-900 dark:text-white">{{ inviteForm.title }}</p>
+                  </div>
+                  <div class="flex justify-between border-t dark:border-white/5 pt-4">
+                    <div>
+                      <p class="text-xs text-gray-500 uppercase">Process</p>
+                      <p class="text-sm font-medium">{{ inviteForm.phases.length }} Phases Total</p>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-xs text-gray-500 uppercase">Starts On</p>
+                      <p class="text-sm font-medium">{{ new Date(inviteForm.from).toLocaleDateString() }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="p-4 bg-yellow-50 dark:bg-yellow-900/10 rounded-lg border border-yellow-100 dark:border-yellow-900/30">
+                <p class="text-xs text-yellow-800 dark:text-yellow-400">
+                  <strong>Notice:</strong> This invitation will remain in <span class="uppercase font-bold">pending</span> status until you manually click "Start" from the main list.
+                </p>
+              </div>
+            </div>
+
+            <!-- Navigation -->
+            <div class="mt-8 flex justify-between gap-3">
+              <button @click="isInviteModalOpen = false" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700">Cancel</button>
+              <div class="flex gap-3">
+                <button v-if="wizardStep > 1 && !editingInvite" @click="wizardStep--" class="px-6 py-2 rounded-md border border-gray-300 dark:border-white/10 text-gray-700 dark:text-gray-200 font-bold text-sm">Back</button>
+                <button @click="saveInvite" :disabled="isSavingInvite" class="inline-flex justify-center items-center gap-2 rounded-md bg-indigo-600 px-8 py-2 text-white font-bold text-sm shadow-lg hover:bg-indigo-700 disabled:opacity-50 transition-all">
+                  <LoadingSpinner v-if="isSavingInvite" size="sm" />
+                  {{ editingInvite ? 'Save Changes' : (wizardStep === 3 ? 'Create Process' : 'Continue') }}
+                </button>
+              </div>
             </div>
           </div>
         </div>

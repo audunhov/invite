@@ -79,6 +79,7 @@ func main() {
 		InvalidateInviteFunc:      application.InvalidateInvite,
 		InvalidatePhaseFunc:       application.InvalidatePhase,
 		GetDashboardStatsFunc:    application.GetDashboardStats,
+		CreateInviteDeepFunc:     application.CreateInviteDeep,
 		Limiter:                   ipLimiter,
 		EmailService:              emailService,
 	}
