@@ -46,7 +46,7 @@ func (ls *LadderStrategy) Execute(ctx context.Context, invite models.Invite, pha
 		})
 	}
 
-	_, err := ls.Inviter.InvitePerson(ctx, invite, ls.List[0])
+	_, err := ls.Inviter.InvitePerson(ctx, invite, phase, ls.List[0])
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func (ls *LadderStrategy) Resume(ctx context.Context, invite models.Invite, phas
 		return nil
 	}
 
-	_, err := ls.Inviter.InvitePerson(ctx, invite, ls.List[nextIndex])
+	_, err := ls.Inviter.InvitePerson(ctx, invite, phase, ls.List[nextIndex])
 	if err != nil {
 		return err
 	}

@@ -65,12 +65,13 @@ type InvitePhaseState struct {
 }
 
 type Invitee struct {
-	ID         uuid.UUID `json:"id"`
-	InviteID   uuid.UUID `json:"invite_id"`
-	ContactID  uuid.UUID `json:"contact_id"`
-	State      string    `json:"state"`
-	CreatedAt  time.Time `json:"created_at"`
-	MagicToken uuid.UUID `json:"magic_token"`
+	ID         uuid.UUID     `json:"id"`
+	InviteID   uuid.UUID     `json:"invite_id"`
+	ContactID  uuid.UUID     `json:"contact_id"`
+	State      string        `json:"state"`
+	CreatedAt  time.Time     `json:"created_at"`
+	MagicToken uuid.UUID     `json:"magic_token"`
+	PhaseID    uuid.NullUUID `json:"phase_id"`
 }
 
 type Person struct {

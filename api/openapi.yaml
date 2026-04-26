@@ -802,6 +802,9 @@ components:
           type: string
         email_attempts:
           type: integer
+        phase_order:
+          type: integer
+          nullable: true
 
     PublicInviteDetails:
       type: object

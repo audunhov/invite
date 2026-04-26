@@ -472,6 +472,7 @@ export interface components {
             email_status?: string;
             email_error?: string;
             email_attempts?: number;
+            phase_order?: number | null;
         };
         PublicInviteDetails: {
             /** Format: uuid */

@@ -14,12 +14,19 @@ import (
 	"invite/models"
 )
 
-func (app *App) InvitePerson(ctx context.Context, i models.Invite, p models.Person) (*models.Invitee, error) {
+func (app *App) InvitePerson(ctx context.Context, i models.Invite, phase models.Phase, p models.Person) (*models.Invitee, error) {
 	inviteeID := uuid.New()
 	magicToken := uuid.New()
+
+	phaseID := uuid.NullUUID{UUID: phase.ID, Valid: true}
+	if phase.ID == uuid.Nil {
+		phaseID.Valid = false
+	}
+
 	err := app.Queries.CreateInvitee(ctx, db.CreateInviteeParams{
 		ID:         inviteeID,
 		InviteID:   i.ID,
+		PhaseID:    phaseID,
 		ContactID:  p.ID,
 		State:      string(models.InviteeStatePending),
 		CreatedAt:  time.Now(),

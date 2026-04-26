@@ -107,11 +107,12 @@ LIMIT 1;
 SELECT * FROM invite_phases WHERE id = $1;
 
 -- name: GetInviteesStatus :many
-SELECT i.id, p.id AS person_id, p.email, p.name, i.created_at AS invited_at, i.state AS status, i.magic_token
+SELECT i.id, p.id AS person_id, p.email, p.name, i.created_at AS invited_at, i.state AS status, i.magic_token, ip."order" AS phase_order
 FROM invitees i
 JOIN persons p ON i.contact_id = p.id
+LEFT JOIN invite_phases ip ON i.phase_id = ip.id
 WHERE i.invite_id = $1
-ORDER BY i.created_at ASC;
+ORDER BY ip."order" ASC NULLS FIRST, i.created_at ASC;
 
 -- name: GetActivePhaseForInvite :one
 SELECT 
@@ -187,8 +188,8 @@ SET status = $2, next_check_at = $3, data = $4
 WHERE phase_id = $1;
 
 -- name: CreateInvitee :exec
-INSERT INTO invitees (id, invite_id, contact_id, state, created_at, magic_token)
-VALUES ($1, $2, $3, $4, $5, $6);
+INSERT INTO invitees (id, invite_id, phase_id, contact_id, state, created_at, magic_token)
+VALUES ($1, $2, $3, $4, $5, $6, $7);
 
 -- name: CreatePhaseState :exec
 INSERT INTO invite_phase_state (phase_id, status, next_check_at, data)

@@ -65,7 +65,7 @@ func (ls *SprintStrategy) Execute(ctx context.Context, invite models.Invite, pha
 					if !ok {
 						return nil
 					}
-					_, err := ls.Inviter.InvitePerson(gCtx, invite, p)
+					_, err := ls.Inviter.InvitePerson(gCtx, invite, phase, p)
 					if err != nil {
 						return err
 					}

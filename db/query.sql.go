@@ -180,23 +180,25 @@ func (q *Queries) CreateInvitePhase(ctx context.Context, arg CreateInvitePhasePa
 }
 
 const createInvitee = `-- name: CreateInvitee :exec
-INSERT INTO invitees (id, invite_id, contact_id, state, created_at, magic_token)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO invitees (id, invite_id, phase_id, contact_id, state, created_at, magic_token)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateInviteeParams struct {
-	ID         uuid.UUID `json:"id"`
-	InviteID   uuid.UUID `json:"invite_id"`
-	ContactID  uuid.UUID `json:"contact_id"`
-	State      string    `json:"state"`
-	CreatedAt  time.Time `json:"created_at"`
-	MagicToken uuid.UUID `json:"magic_token"`
+	ID         uuid.UUID     `json:"id"`
+	InviteID   uuid.UUID     `json:"invite_id"`
+	PhaseID    uuid.NullUUID `json:"phase_id"`
+	ContactID  uuid.UUID     `json:"contact_id"`
+	State      string        `json:"state"`
+	CreatedAt  time.Time     `json:"created_at"`
+	MagicToken uuid.UUID     `json:"magic_token"`
 }
 
 func (q *Queries) CreateInvitee(ctx context.Context, arg CreateInviteeParams) error {
 	_, err := q.db.ExecContext(ctx, createInvitee,
 		arg.ID,
 		arg.InviteID,
+		arg.PhaseID,
 		arg.ContactID,
 		arg.State,
 		arg.CreatedAt,
@@ -738,7 +740,7 @@ func (q *Queries) GetInvitePhase(ctx context.Context, id uuid.UUID) (InvitePhase
 }
 
 const getInvitee = `-- name: GetInvitee :one
-SELECT id, invite_id, contact_id, state, created_at, magic_token FROM invitees WHERE id = $1
+SELECT id, invite_id, contact_id, state, created_at, magic_token, phase_id FROM invitees WHERE id = $1
 `
 
 func (q *Queries) GetInvitee(ctx context.Context, id uuid.UUID) (Invitee, error) {
@@ -751,12 +753,13 @@ func (q *Queries) GetInvitee(ctx context.Context, id uuid.UUID) (Invitee, error)
 		&i.State,
 		&i.CreatedAt,
 		&i.MagicToken,
+		&i.PhaseID,
 	)
 	return i, err
 }
 
 const getInviteeByToken = `-- name: GetInviteeByToken :one
-SELECT i.id, i.invite_id, i.contact_id, i.state, i.created_at, i.magic_token, inv.title, inv.description as invite_description, inv."from", inv."to"
+SELECT i.id, i.invite_id, i.contact_id, i.state, i.created_at, i.magic_token, i.phase_id, inv.title, inv.description as invite_description, inv."from", inv."to"
 FROM invitees i
 JOIN invites inv ON i.invite_id = inv.id
 WHERE i.magic_token = $1
@@ -769,6 +772,7 @@ type GetInviteeByTokenRow struct {
 	State             string         `json:"state"`
 	CreatedAt         time.Time      `json:"created_at"`
 	MagicToken        uuid.UUID      `json:"magic_token"`
+	PhaseID           uuid.NullUUID  `json:"phase_id"`
 	Title             string         `json:"title"`
 	InviteDescription sql.NullString `json:"invite_description"`
 	From              time.Time      `json:"from"`
@@ -785,6 +789,7 @@ func (q *Queries) GetInviteeByToken(ctx context.Context, magicToken uuid.UUID) (
 		&i.State,
 		&i.CreatedAt,
 		&i.MagicToken,
+		&i.PhaseID,
 		&i.Title,
 		&i.InviteDescription,
 		&i.From,
@@ -794,21 +799,23 @@ func (q *Queries) GetInviteeByToken(ctx context.Context, magicToken uuid.UUID) (
 }
 
 const getInviteesStatus = `-- name: GetInviteesStatus :many
-SELECT i.id, p.id AS person_id, p.email, p.name, i.created_at AS invited_at, i.state AS status, i.magic_token
+SELECT i.id, p.id AS person_id, p.email, p.name, i.created_at AS invited_at, i.state AS status, i.magic_token, ip."order" AS phase_order
 FROM invitees i
 JOIN persons p ON i.contact_id = p.id
+LEFT JOIN invite_phases ip ON i.phase_id = ip.id
 WHERE i.invite_id = $1
-ORDER BY i.created_at ASC
+ORDER BY ip."order" ASC NULLS FIRST, i.created_at ASC
 `
 
 type GetInviteesStatusRow struct {
-	ID         uuid.UUID `json:"id"`
-	PersonID   uuid.UUID `json:"person_id"`
-	Email      string    `json:"email"`
-	Name       string    `json:"name"`
-	InvitedAt  time.Time `json:"invited_at"`
-	Status     string    `json:"status"`
-	MagicToken uuid.UUID `json:"magic_token"`
+	ID         uuid.UUID     `json:"id"`
+	PersonID   uuid.UUID     `json:"person_id"`
+	Email      string        `json:"email"`
+	Name       string        `json:"name"`
+	InvitedAt  time.Time     `json:"invited_at"`
+	Status     string        `json:"status"`
+	MagicToken uuid.UUID     `json:"magic_token"`
+	PhaseOrder sql.NullInt32 `json:"phase_order"`
 }
 
 func (q *Queries) GetInviteesStatus(ctx context.Context, inviteID uuid.UUID) ([]GetInviteesStatusRow, error) {
@@ -828,6 +835,7 @@ func (q *Queries) GetInviteesStatus(ctx context.Context, inviteID uuid.UUID) ([]
 			&i.InvitedAt,
 			&i.Status,
 			&i.MagicToken,
+			&i.PhaseOrder,
 		); err != nil {
 			return nil, err
 		}

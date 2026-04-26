@@ -343,6 +343,22 @@ const statusCounts = computed(() => {
   }, { pending: 0, accepted: 0, declined: 0 })
 })
 
+const groupedInvitees = computed(() => {
+  if (!statusReport.value?.invitees) return {}
+  const groups: Record<string, typeof statusReport.value.invitees> = {}
+  
+  for (const invitee of statusReport.value.invitees) {
+    const key = invitee.phase_order !== undefined && invitee.phase_order !== null 
+      ? String(invitee.phase_order) 
+      : 'unassigned'
+      
+    if (!groups[key]) groups[key] = []
+    groups[key].push(invitee)
+  }
+  
+  return groups
+})
+
 onMounted(fetchData)
 </script>
 
@@ -569,52 +585,57 @@ onMounted(fetchData)
 
               <div class="mt-8">
                 <h4 class="text-sm font-bold uppercase text-gray-500 mb-4">Recipient Details</h4>
-                <div class="max-h-64 overflow-y-auto">
-                  <table class="min-w-full divide-y divide-gray-200 dark:divide-white/5">
-                    <thead>
-                      <tr class="text-left text-xs text-gray-400 uppercase">
-                        <th class="pb-2">Name</th>
-                        <th class="pb-2 text-center">Invite Status</th>
-                        <th class="pb-2 text-center">Email Status</th>
-                        <th class="pb-2 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100 dark:divide-white/5">
-                      <tr v-for="p in statusReport.invitees" :key="p.id" class="py-3">
-                        <td class="py-3">
-                          <p class="text-sm font-medium">{{ p.name }}</p>
-                          <p class="text-xs text-gray-500">{{ p.email }}</p>
-                        </td>
-                        <td class="py-3 text-center">
-                          <span :class="{
-                            'text-green-500 font-bold': p.status === 'accepted',
-                            'text-red-500 font-bold': p.status === 'declined',
-                            'text-gray-400': p.status === 'pending'
-                          }" class="text-xs uppercase px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700/50">
-                            {{ p.status }}
-                          </span>
-                        </td>
-                        <td class="py-3 text-center">
-                          <div v-if="p.email_status" class="flex flex-col items-center">
+                <div class="max-h-64 overflow-y-auto pr-2 space-y-6">
+                  <div v-for="(group, phaseKey) in groupedInvitees" :key="phaseKey">
+                    <h5 class="text-xs font-bold uppercase text-gray-700 dark:text-gray-300 mb-2 bg-gray-100 dark:bg-gray-700/50 p-2 rounded">
+                      {{ phaseKey === 'unassigned' ? 'Unassigned' : `Phase #${phaseKey}` }}
+                    </h5>
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-white/5">
+                      <thead>
+                        <tr class="text-left text-xs text-gray-400 uppercase">
+                          <th class="pb-2 pl-2">Name</th>
+                          <th class="pb-2 text-center">Invite Status</th>
+                          <th class="pb-2 text-center">Email Status</th>
+                          <th class="pb-2 text-right pr-2">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-100 dark:divide-white/5">
+                        <tr v-for="p in group" :key="p.id" class="py-3">
+                          <td class="py-3 pl-2">
+                            <p class="text-sm font-medium">{{ p.name }}</p>
+                            <p class="text-xs text-gray-500">{{ p.email }}</p>
+                          </td>
+                          <td class="py-3 text-center">
                             <span :class="{
-                              'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400': p.email_status === 'sent',
-                              'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400': p.email_status === 'failed' && (p.email_attempts || 0) < 3,
-                              'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400': p.email_status === 'failed' && (p.email_attempts || 0) >= 3,
-                              'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300': p.email_status === 'pending'
-                            }" class="px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide">
-                              {{ p.email_status === 'failed' && (p.email_attempts || 0) < 3 ? 'Retrying' : p.email_status }}
+                              'text-green-500 font-bold': p.status === 'accepted',
+                              'text-red-500 font-bold': p.status === 'declined',
+                              'text-gray-400': p.status === 'pending'
+                            }" class="text-xs uppercase px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700/50">
+                              {{ p.status }}
                             </span>
-                            <span v-if="p.email_error" class="text-[9px] text-red-500 mt-1 max-w-[100px] truncate" :title="p.email_error">{{ p.email_error }}</span>
-                          </div>
-                          <span v-else class="text-xs text-gray-400">-</span>
-                        </td>
-                        <td class="py-3 text-right space-x-2">
-                          <button v-if="p.email_status === 'failed' && p.email_id" @click="retryEmail(p.email_id)" class="text-xs bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-1 rounded">Retry</button>
-                          <button v-if="p.status === 'pending'" @click="copyLink(p.magic_token)" class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded">Copy Link</button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+                          </td>
+                          <td class="py-3 text-center">
+                            <div v-if="p.email_status" class="flex flex-col items-center">
+                              <span :class="{
+                                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400': p.email_status === 'sent',
+                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400': p.email_status === 'failed' && (p.email_attempts || 0) < 3,
+                                'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400': p.email_status === 'failed' && (p.email_attempts || 0) >= 3,
+                                'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300': p.email_status === 'pending'
+                              }" class="px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide">
+                                {{ p.email_status === 'failed' && (p.email_attempts || 0) < 3 ? 'Retrying' : p.email_status }}
+                              </span>
+                              <span v-if="p.email_error" class="text-[9px] text-red-500 mt-1 max-w-[100px] truncate" :title="p.email_error">{{ p.email_error }}</span>
+                            </div>
+                            <span v-else class="text-xs text-gray-400">-</span>
+                          </td>
+                          <td class="py-3 text-right space-x-2 pr-2">
+                            <button v-if="p.email_status === 'failed' && p.email_id" @click="retryEmail(p.email_id)" class="text-xs bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-1 rounded">Retry</button>
+                            <button v-if="p.status === 'pending'" @click="copyLink(p.magic_token)" class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded">Copy Link</button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>

@@ -896,6 +896,11 @@ func (s *Server) GetInviteStatus(ctx context.Context, request GetInviteStatusReq
 			MagicToken: &ir.MagicToken,
 		}
 
+		if ir.PhaseOrder.Valid {
+			order := int(ir.PhaseOrder.Int32)
+			is.PhaseOrder = &order
+		}
+
 		// Fetch latest email log for this invitee
 		emailLog, err := s.Queries.GetEmailLogByInvitee(ctx, uuid.NullUUID{UUID: ir.ID, Valid: true})
 		if err == nil {

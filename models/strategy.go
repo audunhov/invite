@@ -5,7 +5,7 @@ import (
 )
 
 type Inviter interface {
-	InvitePerson(ctx context.Context, i Invite, p Person) (*Invitee, error)
+	InvitePerson(ctx context.Context, i Invite, phase Phase, p Person) (*Invitee, error)
 }
 
 type Strategy interface {
