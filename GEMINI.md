@@ -12,7 +12,7 @@ This document contains essential information for navigating and developing this 
 ### Database Seeding
 Populate the database with an admin user, sample persons, groups, tags, and invitations.
 ```bash
-docker compose exec app go run main.go frontend.go seed
+docker compose exec app go run main.go seed
 ```
 *Note: Uses `TRUNCATE CASCADE` - will wipe existing data.*
 

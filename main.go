@@ -149,9 +149,6 @@ func main() {
 	apiHandler := validator(http.StripPrefix("/api", finalApiHandler))
 	mux.Handle("/api/", apiHandler)
 
-	// 3. Frontend (catch-all)
-	serveFrontend(mux)
-
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: mux,
