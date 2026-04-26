@@ -798,6 +798,17 @@ func (s *Server) ListInvites(ctx context.Context, request ListInvitesRequestObje
 			Status:       InviteStatus(i.Status),
 			FromPersonId: i.FromPersonID.UUID,
 			Tags:         &resTags,
+			Progress: &struct {
+				ActivePhaseOrder int `json:"active_phase_order"`
+				TotalAccepted    int `json:"total_accepted"`
+				TotalInvitees    int `json:"total_invitees"`
+				TotalPhases      int `json:"total_phases"`
+			}{
+				ActivePhaseOrder: int(i.ActivePhaseOrder),
+				TotalAccepted:    int(i.TotalAccepted),
+				TotalInvitees:    int(i.TotalInvitees),
+				TotalPhases:      int(i.TotalPhases),
+			},
 		})
 	}
 

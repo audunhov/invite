@@ -435,6 +435,12 @@ export interface components {
             /** Format: uuid */
             from_person_id: string;
             tags?: components["schemas"]["Tag"][];
+            progress?: {
+                total_phases: number;
+                active_phase_order: number;
+                total_accepted: number;
+                total_invitees: number;
+            };
         };
         NewInvite: {
             title: string;

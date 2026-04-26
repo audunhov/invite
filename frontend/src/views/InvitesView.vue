@@ -564,13 +564,38 @@ onMounted(fetchData)
                   </div>
                 </td>
                 <td class="whitespace-nowrap px-3 py-4 text-sm">
-                  <span :class="{
-                    'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300': invite.status === 'pending',
-                    'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400': invite.status === 'active',
-                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400': invite.status === 'completed'
-                  }" class="px-2 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide">
-                    {{ invite.status }}
-                  </span>
+                  <div class="flex flex-col gap-1.5">
+                    <span :class="{
+                      'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300': invite.status === 'pending',
+                      'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400': invite.status === 'active',
+                      'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400': invite.status === 'completed'
+                    }" class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide w-fit">
+                      {{ invite.status }}
+                    </span>
+                    
+                    <!-- Micro-Timeline -->
+                    <div v-if="invite.progress && invite.progress.total_phases > 0" class="w-24">
+                      <div class="flex justify-between items-center mb-0.5">
+                        <span class="text-[8px] font-bold text-gray-400 uppercase">
+                          Ph {{ invite.progress.active_phase_order || (invite.status === 'completed' ? invite.progress.total_phases : 0) }}/{{ invite.progress.total_phases }}
+                        </span>
+                        <span class="text-[8px] font-bold text-indigo-500">
+                          {{ Math.round((invite.progress.total_accepted / (invite.progress.total_invitees || 1)) * 100) }}%
+                        </span>
+                      </div>
+                      <div class="h-1 w-full bg-gray-100 dark:bg-white/5 rounded-full flex overflow-hidden border dark:border-white/5">
+                        <div v-for="pOrder in invite.progress.total_phases" :key="pOrder"
+                             class="h-full border-r last:border-r-0 border-white/20"
+                             :style="{ width: `${100 / invite.progress.total_phases}%` }"
+                             :class="{
+                               'bg-emerald-500': pOrder < invite.progress.active_phase_order || (invite.status === 'completed'),
+                               'bg-indigo-500 animate-pulse': pOrder === invite.progress.active_phase_order && invite.status === 'active',
+                               'bg-gray-200 dark:bg-gray-800': (pOrder > invite.progress.active_phase_order && invite.status === 'active') || invite.status === 'pending'
+                             }"
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
                 </td>
                 <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">{{ new Date(invite.from).toLocaleString() }}</td>
                 <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0 space-x-3">
@@ -593,13 +618,30 @@ onMounted(fetchData)
           <div v-for="invite in invites" :key="invite.id" class="bg-white dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 p-4 shadow-sm">
             <div class="flex justify-between items-start mb-3">
               <h4 class="text-base font-bold text-gray-900 dark:text-white leading-tight pr-2">{{ invite.title }}</h4>
-              <span :class="{
-                'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300': invite.status === 'pending',
-                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400': invite.status === 'active',
-                'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400': invite.status === 'completed'
-              }" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0">
-                {{ invite.status }}
-              </span>
+              <div class="flex flex-col items-end gap-1.5">
+                <span :class="{
+                  'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300': invite.status === 'pending',
+                  'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400': invite.status === 'active',
+                  'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400': invite.status === 'completed'
+                }" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0">
+                  {{ invite.status }}
+                </span>
+                
+                <!-- Micro-Timeline -->
+                <div v-if="invite.progress && invite.progress.total_phases > 0" class="w-20">
+                  <div class="h-1 w-full bg-gray-100 dark:bg-white/5 rounded-full flex overflow-hidden border dark:border-white/5">
+                    <div v-for="pOrder in invite.progress.total_phases" :key="pOrder"
+                         class="h-full border-r last:border-r-0 border-white/20"
+                         :style="{ width: `${100 / invite.progress.total_phases}%` }"
+                         :class="{
+                           'bg-emerald-500': pOrder < invite.progress.active_phase_order || (invite.status === 'completed'),
+                           'bg-indigo-500 animate-pulse': pOrder === invite.progress.active_phase_order && invite.status === 'active',
+                           'bg-gray-200 dark:bg-gray-800': (pOrder > invite.progress.active_phase_order && invite.status === 'active') || invite.status === 'pending'
+                         }"
+                    ></div>
+                  </div>
+                </div>
+              </div>
             </div>
             
             <div class="flex flex-wrap gap-1 mb-4">

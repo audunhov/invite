@@ -1289,18 +1289,42 @@ func (q *Queries) ListInvitePhases(ctx context.Context, inviteID uuid.UUID) ([]I
 }
 
 const listInvites = `-- name: ListInvites :many
-SELECT id, title, description, "from", "to", duration, created_at, status, from_person_id FROM invites
+SELECT 
+    i.id, i.title, i.description, i."from", i."to", i.duration, i.created_at, i.status, i.from_person_id,
+    (SELECT COUNT(*) FROM invite_phases WHERE invite_id = i.id)::int as total_phases,
+    (SELECT COALESCE(ip."order", 0) FROM invite_phases ip 
+     JOIN invite_phase_state ips ON ip.id = ips.phase_id 
+     WHERE ip.invite_id = i.id AND ips.status = 'active' LIMIT 1)::int as active_phase_order,
+    (SELECT COUNT(*) FROM invitees WHERE invite_id = i.id AND state = 'accepted')::int as total_accepted,
+    (SELECT COUNT(*) FROM invitees WHERE invite_id = i.id)::int as total_invitees
+FROM invites i
 `
 
-func (q *Queries) ListInvites(ctx context.Context) ([]Invite, error) {
+type ListInvitesRow struct {
+	ID               uuid.UUID      `json:"id"`
+	Title            string         `json:"title"`
+	Description      sql.NullString `json:"description"`
+	From             time.Time      `json:"from"`
+	To               sql.NullTime   `json:"to"`
+	Duration         sql.NullInt64  `json:"duration"`
+	CreatedAt        time.Time      `json:"created_at"`
+	Status           string         `json:"status"`
+	FromPersonID     uuid.NullUUID  `json:"from_person_id"`
+	TotalPhases      int32          `json:"total_phases"`
+	ActivePhaseOrder int32          `json:"active_phase_order"`
+	TotalAccepted    int32          `json:"total_accepted"`
+	TotalInvitees    int32          `json:"total_invitees"`
+}
+
+func (q *Queries) ListInvites(ctx context.Context) ([]ListInvitesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listInvites)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Invite
+	var items []ListInvitesRow
 	for rows.Next() {
-		var i Invite
+		var i ListInvitesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -1311,6 +1335,10 @@ func (q *Queries) ListInvites(ctx context.Context) ([]Invite, error) {
 			&i.CreatedAt,
 			&i.Status,
 			&i.FromPersonID,
+			&i.TotalPhases,
+			&i.ActivePhaseOrder,
+			&i.TotalAccepted,
+			&i.TotalInvitees,
 		); err != nil {
 			return nil, err
 		}

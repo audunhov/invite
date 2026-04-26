@@ -765,6 +765,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Tag'
+        progress:
+          type: object
+          required: [total_phases, active_phase_order, total_accepted, total_invitees]
+          properties:
+            total_phases: { type: integer }
+            active_phase_order: { type: integer }
+            total_accepted: { type: integer }
+            total_invitees: { type: integer }
 
     NewInvite:
       type: object
