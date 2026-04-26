@@ -218,12 +218,20 @@ onMounted(fetchData)
       </div>
     </div>
 
-    <!-- Groups Table -->
-    <div class="mt-8 flow-root">
-      <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-        <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-          <TableSkeleton v-if="loading && groups.length === 0" :columns="2" />
-          <table v-else class="min-w-full divide-y divide-gray-300 dark:divide-white/10">
+    <div class="mt-8">
+      <div v-if="loading && groups.length === 0" class="space-y-4">
+        <TableSkeleton :columns="2" class="hidden sm:block" />
+        <div v-for="i in 3" :key="i" class="h-24 bg-gray-100 dark:bg-white/5 animate-pulse rounded-xl sm:hidden"></div>
+      </div>
+
+      <div v-else-if="groups.length === 0" class="text-center py-12 bg-white dark:bg-white/5 rounded-xl border border-dashed border-gray-300 dark:border-white/10">
+        <p class="text-gray-500 italic">No groups found.</p>
+      </div>
+
+      <div v-else>
+        <!-- Desktop Table -->
+        <div class="hidden sm:block overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-300 dark:divide-white/10">
             <thead>
               <tr>
                 <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-0">Name</th>
@@ -235,17 +243,30 @@ onMounted(fetchData)
               <tr v-for="group in groups" :key="group.id">
                 <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 dark:text-white sm:pl-0">{{ group.name }}</td>
                 <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">{{ group.description || '-' }}</td>
-                <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0 space-x-4">
-                  <button @click="openMembersModal(group)" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400">Members</button>
-                  <button @click="openEditModal(group)" class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300">Edit</button>
+                <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0 space-x-3">
+                  <button @click="openMembersModal(group)" class="text-green-600 hover:text-green-900 dark:text-green-400">Members</button>
+                  <button @click="openEditModal(group)" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400">Edit</button>
                   <button @click="deleteGroup(group)" class="text-red-600 hover:text-red-900 dark:text-red-400">Delete</button>
                 </td>
               </tr>
-              <tr v-if="groups.length === 0 && !loading">
-                <td colspan="3" class="text-center py-4 text-gray-500 italic">No groups found.</td>
-              </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Mobile Cards -->
+        <div class="sm:hidden space-y-4">
+          <div v-for="group in groups" :key="group.id" class="bg-white dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 p-4 shadow-sm">
+            <div class="flex justify-between items-start mb-2">
+              <h4 class="text-sm font-bold text-gray-900 dark:text-white truncate">{{ group.name }}</h4>
+            </div>
+            <p class="text-xs text-gray-500 line-clamp-2 mb-4 h-8">{{ group.description || 'No description provided.' }}</p>
+            
+            <div class="grid grid-cols-2 gap-2">
+              <button @click="openMembersModal(group)" class="py-2 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-xs font-bold uppercase border dark:border-green-900/30">Members</button>
+              <button @click="openEditModal(group)" class="py-2 rounded-lg bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-gray-300 border dark:border-white/5 text-xs font-bold uppercase">Edit</button>
+              <button @click="deleteGroup(group)" class="py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-bold uppercase col-span-2 border dark:border-red-900/30">Delete</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -527,12 +527,21 @@ onMounted(fetchData)
       </div>
     </div>
 
-    <!-- Invites Table -->
-    <div class="mt-8 flow-root">
-      <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-        <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-          <TableSkeleton v-if="loading && invites.length === 0" :columns="3" />
-          <table v-else class="min-w-full divide-y divide-gray-300 dark:divide-white/10">
+    <!-- Invites List -->
+    <div class="mt-8">
+      <div v-if="loading && invites.length === 0" class="space-y-4">
+        <TableSkeleton :columns="3" class="hidden sm:block" />
+        <div v-for="i in 3" :key="i" class="h-32 bg-gray-100 dark:bg-white/5 animate-pulse rounded-xl sm:hidden"></div>
+      </div>
+      
+      <div v-else-if="invites.length === 0" class="text-center py-12 bg-white dark:bg-white/5 rounded-xl border border-dashed border-gray-300 dark:border-white/10">
+        <p class="text-gray-500 italic">No invitations found. Start by creating one!</p>
+      </div>
+
+      <div v-else>
+        <!-- Desktop Table -->
+        <div class="hidden sm:block overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-300 dark:divide-white/10">
             <thead>
               <tr>
                 <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-0">Title</th>
@@ -575,11 +584,47 @@ onMounted(fetchData)
                   <button @click="deleteInvite(invite)" class="text-red-600 hover:text-red-900 dark:text-red-400">Delete</button>
                 </td>
               </tr>
-              <tr v-if="invites.length === 0 && !loading">
-                <td colspan="4" class="text-center py-4 text-gray-500 italic">No invites found.</td>
-              </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Mobile Cards -->
+        <div class="sm:hidden space-y-4">
+          <div v-for="invite in invites" :key="invite.id" class="bg-white dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 p-4 shadow-sm">
+            <div class="flex justify-between items-start mb-3">
+              <h4 class="text-base font-bold text-gray-900 dark:text-white leading-tight pr-2">{{ invite.title }}</h4>
+              <span :class="{
+                'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300': invite.status === 'pending',
+                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400': invite.status === 'active',
+                'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400': invite.status === 'completed'
+              }" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0">
+                {{ invite.status }}
+              </span>
+            </div>
+            
+            <div class="flex flex-wrap gap-1 mb-4">
+              <span v-for="tag in invite.tags" :key="tag.id" 
+                :style="{ backgroundColor: tag.color + '15', color: tag.color, borderColor: tag.color + '30' }"
+                class="px-2 py-0.5 rounded text-[10px] font-medium border uppercase tracking-wider">
+                {{ tag.name }}
+              </span>
+            </div>
+
+            <p class="text-xs text-gray-500 mb-5">
+              Starts: {{ new Date(invite.from).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) }}
+            </p>
+
+            <div class="grid grid-cols-2 gap-2">
+              <button v-if="invite.status !== 'pending'" @click="openStatusModal(invite)" class="py-2.5 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-xs font-bold uppercase">Status</button>
+              <button v-if="invite.status === 'pending'" @click="startInvite(invite)" :disabled="!!startingInvites[invite.id]" class="py-2.5 rounded-lg bg-indigo-600 text-white text-xs font-bold uppercase disabled:opacity-50 flex items-center justify-center gap-2">
+                <LoadingSpinner v-if="startingInvites[invite.id]" size="sm" />
+                <span>Start</span>
+              </button>
+              <button @click="openPhasesModal(invite)" class="py-2.5 rounded-lg bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-gray-300 border dark:border-white/5 text-xs font-bold uppercase">Phases</button>
+              <button @click="openEditInviteModal(invite)" class="py-2.5 rounded-lg bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-gray-300 border dark:border-white/5 text-xs font-bold uppercase">Edit</button>
+              <button @click="deleteInvite(invite)" class="py-2.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-bold uppercase col-span-2">Delete</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
