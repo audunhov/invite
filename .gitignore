@@ -1,5 +1,6 @@
 # Binaries
 main
+invite
 tmp/
 
 # Logs
@@ -8,6 +9,8 @@ build-errors.log
 # Frontend
 frontend/dist/
 frontend/node_modules/
+frontend/playwright-report/
+frontend/test-results/
 
 # DB
 # (If we want to keep generated files in git, don't ignore db/*.go)
