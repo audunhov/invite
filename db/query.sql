@@ -302,8 +302,10 @@ DELETE FROM tags WHERE id = $1;
 -- name: GetTagUsageCount :one
 SELECT COUNT(*) FROM invite_tags WHERE tag_id = $1;
 
--- name: SetInviteTags :exec
+-- name: ClearInviteTags :exec
 DELETE FROM invite_tags WHERE invite_id = $1;
+
+-- name: AddInviteTags :exec
 INSERT INTO invite_tags (invite_id, tag_id)
 SELECT $1, unnest($2::uuid[]);
 

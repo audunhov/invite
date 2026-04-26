@@ -613,6 +613,112 @@ func (s *Server) RemoveGroupMember(ctx context.Context, request RemoveGroupMembe
 	return RemoveGroupMember204Response{}, nil
 }
 
+// Tag Handlers
+func (s *Server) ListTags(ctx context.Context, request ListTagsRequestObject) (ListTagsResponseObject, error) {
+	tags, err := s.Queries.ListTags(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	res := []Tag{}
+	for _, t := range tags {
+		res = append(res, Tag{
+			Id:    t.ID,
+			Name:  t.Name,
+			Color: t.Color,
+		})
+	}
+
+	return ListTags200JSONResponse(res), nil
+}
+
+func (s *Server) CreateTag(ctx context.Context, request CreateTagRequestObject) (CreateTagResponseObject, error) {
+	t, err := s.Queries.CreateTag(ctx, db.CreateTagParams{
+		ID:    uuid.New(),
+		Name:  request.Body.Name,
+		Color: request.Body.Color,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return CreateTag201JSONResponse(Tag{
+		Id:    t.ID,
+		Name:  t.Name,
+		Color: t.Color,
+	}), nil
+}
+
+func (s *Server) GetTagUsage(ctx context.Context, request GetTagUsageRequestObject) (GetTagUsageResponseObject, error) {
+	_, err := s.Queries.GetTag(ctx, request.Id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return GetTagUsage404Response{}, nil
+		}
+		return nil, err
+	}
+
+	count, err := s.Queries.GetTagUsageCount(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	c := int(count)
+	return GetTagUsage200JSONResponse{Count: &c}, nil
+}
+
+func (s *Server) UpdateTag(ctx context.Context, request UpdateTagRequestObject) (UpdateTagResponseObject, error) {
+	params := db.UpdateTagParams{
+		ID: request.Id,
+	}
+	
+	// Get current tag to handle partial updates
+	current, err := s.Queries.GetTag(ctx, request.Id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return UpdateTag404Response{}, nil
+		}
+		return nil, err
+	}
+
+	params.Name = current.Name
+	if request.Body.Name != nil {
+		params.Name = *request.Body.Name
+	}
+	
+	params.Color = current.Color
+	if request.Body.Color != nil {
+		params.Color = *request.Body.Color
+	}
+
+	t, err := s.Queries.UpdateTag(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return UpdateTag200JSONResponse(Tag{
+		Id:    t.ID,
+		Name:  t.Name,
+		Color: t.Color,
+	}), nil
+}
+
+func (s *Server) DeleteTag(ctx context.Context, request DeleteTagRequestObject) (DeleteTagResponseObject, error) {
+	_, err := s.Queries.GetTag(ctx, request.Id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DeleteTag404Response{}, nil
+		}
+		return nil, err
+	}
+
+	err = s.Queries.DeleteTag(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+	return DeleteTag204Response{}, nil
+}
+
 // Invite Handlers
 func (s *Server) ListInvites(ctx context.Context, request ListInvitesRequestObject) (ListInvitesResponseObject, error) {
 	invites, err := s.Queries.ListInvites(ctx)
@@ -622,6 +728,16 @@ func (s *Server) ListInvites(ctx context.Context, request ListInvitesRequestObje
 
 	res := []Invite{}
 	for _, i := range invites {
+		tags, _ := s.Queries.GetTagsByInvite(ctx, i.ID)
+		resTags := []Tag{}
+		for _, t := range tags {
+			resTags = append(resTags, Tag{
+				Id:    t.ID,
+				Name:  t.Name,
+				Color: t.Color,
+			})
+		}
+
 		res = append(res, Invite{
 			Id:           i.ID,
 			Title:        i.Title,
@@ -632,6 +748,7 @@ func (s *Server) ListInvites(ctx context.Context, request ListInvitesRequestObje
 			CreatedAt:    i.CreatedAt,
 			Status:       InviteStatus(i.Status),
 			FromPersonId: i.FromPersonID.UUID,
+			Tags:         &resTags,
 		})
 	}
 
@@ -652,6 +769,26 @@ func (s *Server) CreateInvite(ctx context.Context, request CreateInviteRequestOb
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// Handle tags
+	if request.Body.TagIds != nil && len(*request.Body.TagIds) > 0 {
+		var tagUUIDs []uuid.UUID
+		for _, idStr := range *request.Body.TagIds {
+			u, err := uuid.Parse(idStr.String())
+			if err == nil {
+				tagUUIDs = append(tagUUIDs, u)
+			}
+		}
+		if len(tagUUIDs) > 0 {
+			err = s.Queries.AddInviteTags(ctx, db.AddInviteTagsParams{
+				InviteID: i.ID,
+				Column2:  tagUUIDs,
+			})
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return CreateInvite201JSONResponse(Invite{
@@ -676,6 +813,16 @@ func (s *Server) GetInvite(ctx context.Context, request GetInviteRequestObject) 
 		return nil, err
 	}
 
+	tags, _ := s.Queries.GetTagsByInvite(ctx, i.ID)
+	resTags := []Tag{}
+	for _, t := range tags {
+		resTags = append(resTags, Tag{
+			Id:    t.ID,
+			Name:  t.Name,
+			Color: t.Color,
+		})
+	}
+
 	return GetInvite200JSONResponse(Invite{
 		Id:           i.ID,
 		Title:        i.Title,
@@ -686,6 +833,7 @@ func (s *Server) GetInvite(ctx context.Context, request GetInviteRequestObject) 
 		CreatedAt:    i.CreatedAt,
 		Status:       InviteStatus(i.Status),
 		FromPersonId: i.FromPersonID.UUID,
+		Tags:         &resTags,
 	}), nil
 }
 
@@ -721,6 +869,33 @@ func (s *Server) UpdateInvite(ctx context.Context, request UpdateInviteRequestOb
 			return UpdateInvite404Response{}, nil
 		}
 		return nil, err
+	}
+
+	// Handle tags
+	if request.Body.TagIds != nil {
+		err = s.Queries.ClearInviteTags(ctx, i.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(*request.Body.TagIds) > 0 {
+			var tagUUIDs []uuid.UUID
+			for _, idStr := range *request.Body.TagIds {
+				u, err := uuid.Parse(idStr.String())
+				if err == nil {
+					tagUUIDs = append(tagUUIDs, u)
+				}
+			}
+			if len(tagUUIDs) > 0 {
+				err = s.Queries.AddInviteTags(ctx, db.AddInviteTagsParams{
+					InviteID: i.ID,
+					Column2:  tagUUIDs,
+				})
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 
 	return UpdateInvite200JSONResponse(Invite{
@@ -844,9 +1019,20 @@ func (s *Server) GetInviteStatus(ctx context.Context, request GetInviteStatusReq
 		return nil, err
 	}
 
+	tags, _ := s.Queries.GetTagsByInvite(ctx, i.ID)
+	resTags := []Tag{}
+	for _, t := range tags {
+		resTags = append(resTags, Tag{
+			Id:    t.ID,
+			Name:  t.Name,
+			Color: t.Color,
+		})
+	}
+
 	resp := InviteStatusReport{
 		InviteId:      i.ID,
 		OverallStatus: i.Status,
+		Tags:          &resTags,
 	}
 
 	// 2. Get Active Phase details (if active)

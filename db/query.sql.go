@@ -31,6 +31,30 @@ func (q *Queries) AddGroupMember(ctx context.Context, arg AddGroupMemberParams) 
 	return err
 }
 
+const addInviteTags = `-- name: AddInviteTags :exec
+INSERT INTO invite_tags (invite_id, tag_id)
+SELECT $1, unnest($2::uuid[])
+`
+
+type AddInviteTagsParams struct {
+	InviteID uuid.UUID   `json:"invite_id"`
+	Column2  []uuid.UUID `json:"column_2"`
+}
+
+func (q *Queries) AddInviteTags(ctx context.Context, arg AddInviteTagsParams) error {
+	_, err := q.db.ExecContext(ctx, addInviteTags, arg.InviteID, pq.Array(arg.Column2))
+	return err
+}
+
+const clearInviteTags = `-- name: ClearInviteTags :exec
+DELETE FROM invite_tags WHERE invite_id = $1
+`
+
+func (q *Queries) ClearInviteTags(ctx context.Context, inviteID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, clearInviteTags, inviteID)
+	return err
+}
+
 const countAdmins = `-- name: CountAdmins :one
 SELECT COUNT(*) FROM persons WHERE password_hash IS NOT NULL
 `
@@ -1356,15 +1380,6 @@ type RespondToInviteParams struct {
 
 func (q *Queries) RespondToInvite(ctx context.Context, arg RespondToInviteParams) error {
 	_, err := q.db.ExecContext(ctx, respondToInvite, arg.MagicToken, arg.State)
-	return err
-}
-
-const setInviteTags = `-- name: SetInviteTags :exec
-DELETE FROM invite_tags WHERE invite_id = $1
-`
-
-func (q *Queries) SetInviteTags(ctx context.Context, inviteID uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, setInviteTags, inviteID)
 	return err
 }
 

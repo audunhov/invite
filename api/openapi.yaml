@@ -654,6 +654,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Tag'
+        '404':
+          description: Not found
     delete:
       summary: Delete a tag
       operationId: DeleteTag
@@ -667,6 +669,8 @@ paths:
       responses:
         '204':
           description: Deleted
+        '404':
+          description: Not found
     get:
       summary: Get tag usage count
       operationId: GetTagUsage
@@ -686,6 +690,8 @@ paths:
                 type: object
                 properties:
                   count: { type: integer }
+        '404':
+          description: Not found
 
 components:
 
@@ -848,6 +854,10 @@ components:
           format: uuid
         overall_status:
           type: string
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
         active_phase:
           type: object
           properties:
