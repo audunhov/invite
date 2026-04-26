@@ -15,7 +15,7 @@ client.use({
         // If the backend returns a specific error message structure, handle it here
         const message = errorData.message || errorData.error || `API Error: ${response.statusText}`;
         notify.error(message);
-      } catch (e) {
+      } catch {
         // Fallback for non-JSON errors
         notify.error(`API Error: ${response.statusText} (${response.status})`);
       }

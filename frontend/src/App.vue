@@ -4,12 +4,24 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { Toaster } from 'vue-sonner'
 import ConfirmModal from './components/ConfirmModal.vue'
 import { useConfirm } from './composables/useConfirm'
+import { useTheme } from './composables/useTheme'
 import { useAuthStore } from './stores/auth'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const { state: confirmState, onConfirm, onCancel } = useConfirm()
+useTheme()
+
+const getInitials = (name?: string) => {
+  if (!name) return '?'
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
 
 onMounted(async () => {
   await auth.checkAuth()
@@ -113,11 +125,9 @@ async function handleLogout() {
               >
                 <span class="absolute -inset-1.5"></span>
                 <span class="sr-only">Open user menu</span>
-                <img
-                  src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-                  alt=""
-                  class="size-8 rounded-full outline -outline-offset-1 outline-black/5 dark:outline-white/10"
-                />
+                <div class="flex size-8 items-center justify-center rounded-full bg-indigo-600 text-xs font-medium text-white ring-1 ring-black/5 dark:ring-white/10">
+                  {{ getInitials(auth.user?.name) }}
+                </div>
               </button>
 
               <el-menu
@@ -219,11 +229,9 @@ async function handleLogout() {
         <div class="border-t border-gray-200 pt-4 pb-3 dark:border-gray-700">
           <div class="flex items-center px-4">
             <div class="shrink-0">
-              <img
-                src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-                alt=""
-                class="size-10 rounded-full outline -outline-offset-1 outline-black/5 dark:outline-white/10"
-              />
+              <div class="flex size-10 items-center justify-center rounded-full bg-indigo-600 text-sm font-medium text-white ring-1 ring-black/5 dark:ring-white/10">
+                {{ getInitials(auth.user?.name) }}
+              </div>
             </div>
             <div class="ml-3">
               <div class="text-base font-medium text-gray-800 dark:text-white">{{ auth.user?.name }}</div>
