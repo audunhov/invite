@@ -1387,6 +1387,40 @@ func (q *Queries) ListPersons(ctx context.Context) ([]Person, error) {
 	return items, nil
 }
 
+const listSessionsByPerson = `-- name: ListSessionsByPerson :many
+SELECT id, person_id, expires_at, created_at FROM sessions 
+WHERE person_id = $1 
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListSessionsByPerson(ctx context.Context, personID uuid.UUID) ([]Session, error) {
+	rows, err := q.db.QueryContext(ctx, listSessionsByPerson, personID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Session
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.PersonID,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTags = `-- name: ListTags :many
 SELECT id, name, color, created_at FROM tags ORDER BY name ASC
 `

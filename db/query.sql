@@ -258,6 +258,11 @@ FROM sessions s
 JOIN persons p ON s.person_id = p.id
 WHERE s.id = $1 AND s.expires_at > NOW();
 
+-- name: ListSessionsByPerson :many
+SELECT * FROM sessions 
+WHERE person_id = $1 
+ORDER BY created_at DESC;
+
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE id = $1;
 

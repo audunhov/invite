@@ -405,6 +405,39 @@ paths:
                 $ref: '#/components/schemas/Person'
         '401':
           description: Not authenticated
+  /auth/sessions:
+    get:
+      summary: List active sessions for the current user
+      operationId: ListSessions
+      responses:
+        '200':
+          description: A list of sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Session'
+        '401':
+          description: Not authenticated
+  /auth/sessions/{id}:
+    delete:
+      summary: Revoke a session
+      operationId: DeleteSession
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Session revoked
+        '401':
+          description: Not authenticated
+        '404':
+          description: Session not found
 
   /respond/{token}:
     get:
@@ -1044,6 +1077,22 @@ components:
         id: { type: string, format: uuid }
         name: { type: string }
         color: { type: string }
+    Session:
+      type: object
+      required: [id, person_id, expires_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        person_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
     NewTag:
       type: object
       required: [name, color]

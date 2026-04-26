@@ -1247,3 +1247,11 @@ func (s *Server) RespondToInvite(ctx context.Context, request RespondToInviteReq
 
 	return RespondToInvite204Response{}, nil
 }
+
+func (s *Server) ListSessions(ctx context.Context, request ListSessionsRequestObject) (ListSessionsResponseObject, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *Server) DeleteSession(ctx context.Context, request DeleteSessionRequestObject) (DeleteSessionResponseObject, error) {
+	return nil, errors.New("not implemented")
+}
