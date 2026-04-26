@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { client } from '../utils/api'
 import { notify } from '../utils/toast'
 
 const route = useRoute()
@@ -33,19 +34,14 @@ async function resetPassword() {
   loading.value = true
   error.value = null
   try {
-    const response = await fetch('/api/auth/reset-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const { error: err } = await client.POST('/auth/reset-password', {
+      body: {
         token: token.value,
         password: password.value,
-      }),
+      }
     })
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}))
-      throw new Error(errData.message || 'Reset failed')
-    }
+    if (err) throw err
 
     success.value = true
     notify.success('Password reset successful')
@@ -54,7 +50,6 @@ async function resetPassword() {
     }, 3000)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'An unexpected error occurred'
-    notify.error(error.value)
   } finally {
     loading.value = false
   }

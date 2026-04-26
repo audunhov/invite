@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
 import type { components } from '../api-types'
+import { client } from '../utils/api'
 import { notify } from '../utils/toast'
 import { useConfirm } from '../composables/useConfirm'
 import TableSkeleton from '../components/TableSkeleton.vue'
@@ -27,9 +28,9 @@ const form = reactive({
 async function fetchPersons() {
   loading.value = true
   try {
-    const response = await fetch('/api/persons')
-    if (!response.ok) throw new Error('Failed to fetch persons')
-    persons.value = await response.json()
+    const { data, error: err } = await client.GET('/persons')
+    if (err) throw err
+    persons.value = data || []
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error'
   } finally {
@@ -59,41 +60,33 @@ function closeModal() {
 async function savePerson() {
   isSaving.value = true
   try {
-    let response: Response
     if (editingPerson.value) {
       // Update
-      const body: UpdatePerson = {
-        name: form.name,
-        email: form.email,
-      }
-      response = await fetch(`/api/persons/${editingPerson.value.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      const { error: err } = await client.PATCH('/persons/{id}', {
+        params: { path: { id: editingPerson.value.id } },
+        body: {
+          name: form.name,
+          email: form.email,
+        },
       })
+      if (err) throw err
     } else {
       // Create
-      const body: NewPerson = {
-        name: form.name,
-        email: form.email,
-      }
-      response = await fetch('/api/persons', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      const { error: err } = await client.POST('/persons', {
+        body: {
+          name: form.name,
+          email: form.email,
+        },
       })
-    }
-
-    if (!response.ok) {
-      const errData = await response.json()
-      throw new Error(errData.message || 'Failed to save person')
+      if (err) throw err
     }
 
     await fetchPersons()
     closeModal()
     notify.success('Person saved successfully')
   } catch (err) {
-    notify.error(err instanceof Error ? err.message : 'Failed to save')
+    // Error is handled by global client middleware, but we catch it here to stop the flow
+    console.error('Save failed:', err)
   } finally {
     isSaving.value = false
   }
@@ -110,14 +103,14 @@ async function deletePerson(person: Person) {
   if (!isConfirmed) return
 
   try {
-    const response = await fetch(`/api/persons/${person.id}`, {
-      method: 'DELETE',
+    const { error: err } = await client.DELETE('/persons/{id}', {
+      params: { path: { id: person.id } },
     })
-    if (!response.ok) throw new Error('Failed to delete person')
+    if (err) throw err
     await fetchPersons()
     notify.success('Person removed')
   } catch (err) {
-    notify.error(err instanceof Error ? err.message : 'Failed to delete')
+    console.error('Delete failed:', err)
   }
 }
 

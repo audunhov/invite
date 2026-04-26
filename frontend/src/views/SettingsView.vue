@@ -2,8 +2,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import type { components } from '../api-types'
-import { notify } from '@/utils/toast'
-import { useConfirm } from '@/composables/useConfirm'
+import { client } from '../utils/api'
+import { notify } from '../utils/toast'
+import { useConfirm } from '../composables/useConfirm'
 
 type UpdatePerson = components['schemas']['UpdatePerson']
 type Tag = components['schemas']['Tag']
@@ -31,9 +32,9 @@ const tagForm = reactive<NewTag>({
 async function fetchTags() {
   isLoadingTags.value = true
   try {
-    const response = await fetch('/api/tags')
-    if (!response.ok) throw new Error('Failed to fetch tags')
-    tags.value = await response.json()
+    const { data, error } = await client.GET('/tags')
+    if (error) throw error
+    if (data) tags.value = data
   } catch (err) {
     notify.error('Failed to load tags')
   } finally {
@@ -49,25 +50,27 @@ async function saveTag() {
 
   isSavingTag.value = true
   try {
-    const url = editingTag.value ? `/api/tags/${editingTag.value.id}` : '/api/tags'
-    const method = editingTag.value ? 'PATCH' : 'POST'
-    
-    const response = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(tagForm),
-    })
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}))
-      throw new Error(errData.message || 'Failed to save tag')
+    let error
+    if (editingTag.value) {
+      const res = await client.PATCH('/tags/{id}', {
+        params: { path: { id: editingTag.value.id } },
+        body: tagForm
+      })
+      error = res.error
+    } else {
+      const res = await client.POST('/tags', {
+        body: tagForm
+      })
+      error = res.error
     }
+
+    if (error) throw error
 
     notify.success(editingTag.value ? 'Tag updated' : 'Tag created')
     cancelEdit()
     await fetchTags()
   } catch (err) {
-    notify.error(err instanceof Error ? err.message : 'Failed to save tag')
+    // Middleware handles toasts for non-ok responses
   } finally {
     isSavingTag.value = false
   }
@@ -88,9 +91,11 @@ function cancelEdit() {
 async function deleteTag(tag: Tag) {
   try {
     // Check usage
-    const usageResponse = await fetch(`/api/tags/${tag.id}`)
-    if (!usageResponse.ok) throw new Error('Failed to check tag usage')
-    const { count } = await usageResponse.json()
+    const { data, error: usageError } = await client.GET('/tags/{id}', {
+      params: { path: { id: tag.id } }
+    })
+    if (usageError) throw usageError
+    const count = data?.count || 0
 
     let message = `Are you sure you want to delete the tag "${tag.name}"?`
     if (count > 0) {
@@ -106,16 +111,16 @@ async function deleteTag(tag: Tag) {
 
     if (!confirmed) return
 
-    const response = await fetch(`/api/tags/${tag.id}`, {
-      method: 'DELETE',
+    const { error } = await client.DELETE('/tags/{id}', {
+      params: { path: { id: tag.id } }
     })
 
-    if (!response.ok) throw new Error('Failed to delete tag')
+    if (error) throw error
 
     notify.success('Tag deleted')
     await fetchTags()
   } catch (err) {
-    notify.error(err instanceof Error ? err.message : 'Failed to delete tag')
+    // Middleware handles toasts
   }
 }
 
@@ -141,25 +146,18 @@ async function updatePassword() {
 
   isSaving.value = true
   try {
-    const body: UpdatePerson = {
-      password: form.password,
-    }
-    const response = await fetch(`/api/persons/${auth.user.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+    const { error } = await client.PATCH('/persons/{id}', {
+      params: { path: { id: auth.user.id } },
+      body: { password: form.password }
     })
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}))
-      throw new Error(errData.message || 'Failed to update password')
-    }
+    if (error) throw error
 
     notify.success('Password updated successfully')
     form.password = ''
     form.confirmPassword = ''
   } catch (err) {
-    notify.error(err instanceof Error ? err.message : 'Failed to update password')
+    // Middleware handles toasts
   } finally {
     isSaving.value = false
   }

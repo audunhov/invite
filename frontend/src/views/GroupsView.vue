@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed } from 'vue'
 import type { components } from '../api-types'
+import { client } from '../utils/api'
 import { notify } from '../utils/toast'
 import { useConfirm } from '../composables/useConfirm'
 import TableSkeleton from '../components/TableSkeleton.vue'
@@ -47,15 +48,11 @@ const availablePersons = computed(() => {
 async function fetchData() {
   loading.value = true
   try {
-    const [groupsRes, personsRes] = await Promise.all([
-      fetch('/api/groups'),
-      fetch('/api/persons')
-    ])
+    const groupsRes = await client.GET('/groups')
+    const personsRes = await client.GET('/persons')
     
-    if (!groupsRes.ok || !personsRes.ok) throw new Error('Failed to fetch data')
-    
-    groups.value = await groupsRes.json()
-    persons.value = await personsRes.json()
+    groups.value = groupsRes.data || []
+    persons.value = personsRes.data || []
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error'
   } finally {
@@ -66,11 +63,13 @@ async function fetchData() {
 async function fetchMembers(groupId: string) {
   loadingMembers.value = true
   try {
-    const response = await fetch(`/api/groups/${groupId}/members`)
-    if (!response.ok) throw new Error('Failed to fetch members')
-    currentGroupMembers.value = (await response.json()) || []
+    const { data, error: err } = await client.GET('/groups/{id}/members', {
+      params: { path: { id: groupId } }
+    })
+    if (err) throw err
+    currentGroupMembers.value = data || []
   } catch (err) {
-    notify.error(err instanceof Error ? err.message : 'Error fetching members')
+    console.error('Error fetching members:', err)
   } finally {
     loadingMembers.value = false
   }
@@ -108,29 +107,24 @@ function closeModal() {
 async function saveGroup() {
   isSaving.value = true
   try {
-    let response: Response
     if (editingGroup.value) {
-      const body: UpdateGroup = { name: form.name, description: form.description }
-      response = await fetch(`/api/groups/${editingGroup.value.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      const { error: err } = await client.PATCH('/groups/{id}', {
+        params: { path: { id: editingGroup.value.id } },
+        body: { name: form.name, description: form.description }
       })
+      if (err) throw err
     } else {
-      const body: NewGroup = { name: form.name, description: form.description }
-      response = await fetch('/api/groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      const { error: err } = await client.POST('/groups', {
+        body: { name: form.name, description: form.description }
       })
+      if (err) throw err
     }
 
-    if (!response.ok) throw new Error('Failed to save group')
     await fetchData()
     closeModal()
     notify.success('Group saved successfully')
   } catch (err) {
-    notify.error(err instanceof Error ? err.message : 'Failed to save group')
+    console.error('Failed to save group:', err)
   } finally {
     isSaving.value = false
   }
@@ -147,12 +141,14 @@ async function deleteGroup(group: Group) {
   if (!isConfirmed) return
 
   try {
-    const response = await fetch(`/api/groups/${group.id}`, { method: 'DELETE' })
-    if (!response.ok) throw new Error('Failed to delete group')
+    const { error: err } = await client.DELETE('/groups/{id}', {
+      params: { path: { id: group.id } }
+    })
+    if (err) throw err
     await fetchData()
     notify.success('Group deleted')
   } catch (err) {
-    notify.error(err instanceof Error ? err.message : 'Failed to delete group')
+    console.error('Failed to delete group:', err)
   }
 }
 
@@ -160,17 +156,16 @@ async function addMember() {
   if (!selectedGroupId.value || !memberForm.personId) return
   isAddingMember.value = true
   try {
-    const response = await fetch(`/api/groups/${selectedGroupId.value}/members`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ person_id: memberForm.personId }),
+    const { error: err } = await client.POST('/groups/{id}/members', {
+      params: { path: { id: selectedGroupId.value } },
+      body: { person_id: memberForm.personId }
     })
-    if (!response.ok) throw new Error('Failed to add member')
+    if (err) throw err
     await fetchMembers(selectedGroupId.value)
     memberForm.personId = ''
     notify.success('Member added')
   } catch (err) {
-    notify.error(err instanceof Error ? err.message : 'Failed to add member')
+    console.error('Failed to add member:', err)
   } finally {
     isAddingMember.value = false
   }
@@ -189,14 +184,14 @@ async function removeMember(person: Person) {
   if (!isConfirmed) return
 
   try {
-    const response = await fetch(`/api/groups/${selectedGroupId.value}/members/${person.id}`, {
-      method: 'DELETE',
+    const { error: err } = await client.DELETE('/groups/{id}/members/{person_id}', {
+      params: { path: { id: selectedGroupId.value, person_id: person.id } }
     })
-    if (!response.ok) throw new Error('Failed to remove member')
+    if (err) throw err
     await fetchMembers(selectedGroupId.value)
     notify.success('Member removed')
   } catch (err) {
-    notify.error(err instanceof Error ? err.message : 'Failed to remove member')
+    console.error('Failed to remove member:', err)
   }
 }
 

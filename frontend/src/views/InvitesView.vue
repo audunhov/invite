@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed } from 'vue'
 import type { components } from '../api-types'
+import { client } from '@/utils/api'
 import { notify } from '@/utils/toast'
 import { useConfirm } from '@/composables/useConfirm'
 import TableSkeleton from '@/components/TableSkeleton.vue'
@@ -59,16 +60,17 @@ async function fetchData() {
   loading.value = true
   try {
     const [invitesRes, personsRes, groupsRes, tagsRes] = await Promise.all([
-      fetch('/api/invites'),
-      fetch('/api/persons'),
-      fetch('/api/groups'),
-      fetch('/api/tags')
+      client.GET('/invites'),
+      client.GET('/persons'),
+      client.GET('/groups'),
+      client.GET('/tags')
     ])
-    if (!invitesRes.ok) throw new Error('Failed to fetch invites')
-    invites.value = await invitesRes.json()
-    persons.value = await (personsRes.ok ? personsRes.json() : [])
-    groups.value = await (groupsRes.ok ? groupsRes.json() : [])
-    tags.value = await (tagsRes.ok ? tagsRes.json() : [])
+    
+    if (invitesRes.error) throw new Error('Failed to fetch invites')
+    invites.value = invitesRes.data || []
+    persons.value = personsRes.data || []
+    groups.value = groupsRes.data || []
+    tags.value = tagsRes.data || []
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error'
   } finally {
@@ -139,26 +141,30 @@ function openEditInviteModal(invite: Invite) {
 async function saveInvite() {
   isSavingInvite.value = true
   try {
-    const body: Record<string, unknown> = {
+    const body = {
       title: inviteForm.title,
       description: inviteForm.description,
       from: new Date(inviteForm.from).toISOString(),
       from_person_id: inviteForm.from_person_id,
       tag_ids: inviteForm.tag_ids,
+      to: inviteForm.to ? new Date(inviteForm.to).toISOString() : undefined,
     }
-    if (inviteForm.to) {
-      body.to = new Date(inviteForm.to).toISOString()
-    }
-    const method = editingInvite.value ? 'PATCH' : 'POST'
-    const url = editingInvite.value ? `/api/invites/${editingInvite.value.id}` : '/api/invites'
-    
-    const response = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
 
-    if (!response.ok) throw new Error('Failed to save invite')
+    let error: any
+    if (editingInvite.value) {
+      const res = await client.PATCH('/invites/{id}', {
+        params: { path: { id: editingInvite.value.id } },
+        body
+      })
+      error = res.error
+    } else {
+      const res = await client.POST('/invites', {
+        body
+      })
+      error = res.error
+    }
+
+    if (error) throw error
     await fetchData()
     isInviteModalOpen.value = false
     notify.success(editingInvite.value ? 'Invite updated' : 'Invite created')
@@ -181,8 +187,10 @@ async function deleteInvite(invite: Invite) {
     confirmLabel: 'Delete'
   })) return
   try {
-    const response = await fetch(`/api/invites/${invite.id}`, { method: 'DELETE' })
-    if (!response.ok) throw new Error('Failed to delete')
+    const { error } = await client.DELETE('/invites/{id}', {
+      params: { path: { id: invite.id } }
+    })
+    if (error) throw error
     await fetchData()
     notify.success('Invite deleted')
   } catch (err) {
@@ -199,8 +207,11 @@ async function openPhasesModal(invite: Invite) {
 async function fetchPhases(inviteId: string) {
   loadingPhases.value = true
   try {
-    const response = await fetch(`/api/invites/${inviteId}/phases`)
-    phases.value = await response.json()
+    const { data, error } = await client.GET('/invites/{id}/phases', {
+      params: { path: { id: inviteId } }
+    })
+    if (error) throw error
+    phases.value = data || []
     phaseForm.order = phases.value.length + 1
   } catch (err) {
     notify.error(err instanceof Error ? err.message : String(err))
@@ -230,18 +241,16 @@ async function addPhase() {
       }
     }
 
-    const body: NewInvitePhase = {
-      order: phaseForm.order,
-      strategy_kind: phaseForm.strategy_kind,
-      strategy_config: strategy_config as any
-    }
-
-    const response = await fetch(`/api/invites/${selectedInviteForPhases.value.id}/phases`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+    const { error } = await client.POST('/invites/{id}/phases', {
+      params: { path: { id: selectedInviteForPhases.value.id } },
+      body: {
+        order: phaseForm.order,
+        strategy_kind: phaseForm.strategy_kind,
+        strategy_config: strategy_config as any
+      }
     })
-    if (!response.ok) throw new Error('Failed to add phase')
+
+    if (error) throw error
     await fetchPhases(selectedInviteForPhases.value.id)
     phaseForm.selectedRecipientIds = []
     notify.success('Phase added')
@@ -268,10 +277,10 @@ async function removePhase(phase: InvitePhase) {
   })) return
 
   try {
-    const response = await fetch(`/api/invites/${selectedInviteForPhases.value.id}/phases/${phase.id}`, {
-      method: 'DELETE'
+    const { error } = await client.DELETE('/invites/{id}/phases/{phase_id}', {
+      params: { path: { id: selectedInviteForPhases.value.id, phase_id: phase.id } }
     })
-    if (!response.ok) throw new Error('Failed to remove phase')
+    if (error) throw error
     await fetchPhases(selectedInviteForPhases.value.id)
     await fetchData() // Update invite status in main table
     notify.success('Phase removed')
@@ -283,11 +292,10 @@ async function removePhase(phase: InvitePhase) {
 async function startInvite(invite: Invite) {
   startingInvites[invite.id] = true
   try {
-    const response = await fetch(`/api/invites/${invite.id}/start`, { method: 'POST' })
-    if (!response.ok) {
-      const err = await response.json()
-      throw new Error(err.message || 'Failed to start')
-    }
+    const { error } = await client.POST('/invites/{id}/start', {
+      params: { path: { id: invite.id } }
+    })
+    if (error) throw error
     notify.success('Invite process started!')
     await fetchData()
   } catch (err) {
@@ -301,9 +309,11 @@ async function openStatusModal(invite: Invite) {
   isStatusModalOpen.value = true
   loadingStatus.value = true
   try {
-    const response = await fetch(`/api/invites/${invite.id}/status`)
-    if (!response.ok) throw new Error('Failed to fetch status')
-    statusReport.value = await response.json()
+    const { data, error } = await client.GET('/invites/{id}/status', {
+      params: { path: { id: invite.id } }
+    })
+    if (error) throw error
+    statusReport.value = data || null
   } catch (err) {
     notify.error(err instanceof Error ? err.message : String(err))
     isStatusModalOpen.value = false
@@ -463,12 +473,12 @@ onMounted(fetchData)
             <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">{{ editingInvite ? 'Edit Invite' : 'Create Invite' }}</h3>
             <div class="mt-4 space-y-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
-                <input v-model="inviteForm.title" type="text" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border" />
+                <label for="invite-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
+                <input id="invite-title" v-model="inviteForm.title" type="text" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border" />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-                <textarea v-model="inviteForm.description" rows="2" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border"></textarea>
+                <label for="invite-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+                <textarea id="invite-description" v-model="inviteForm.description" rows="2" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border"></textarea>
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tags</label>
@@ -489,14 +499,14 @@ onMounted(fetchData)
                 </div>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">From</label>
-                <select v-model="inviteForm.from_person_id" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border">
+                <label for="invite-from-person" class="block text-sm font-medium text-gray-700 dark:text-gray-300">From</label>
+                <select id="invite-from-person" v-model="inviteForm.from_person_id" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border">
                   <option v-for="p in persons" :key="p.id" :value="p.id">{{ p.name }} ({{ p.email }})</option>
                 </select>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Starts At</label>
-                <input v-model="inviteForm.from" type="datetime-local" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border" />
+                <label for="invite-from-at" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Starts At</label>
+                <input id="invite-from-at" v-model="inviteForm.from" type="datetime-local" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2 border" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Ends At (Optional)</label>

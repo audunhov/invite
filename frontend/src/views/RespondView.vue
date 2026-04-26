@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import type { components } from '../api-types'
+import { client } from '../utils/api'
 import { notify } from '../utils/toast'
 
 type PublicInviteDetails = components['schemas']['PublicInviteDetails']
@@ -17,15 +18,21 @@ const actionTaken = ref<'accepted' | 'declined' | null>(null)
 
 async function fetchInvite() {
   try {
-    const response = await fetch(`/api/respond/${token}`)
-    if (!response.ok) {
+    const { data, error: err, response } = await client.GET('/respond/{token}', {
+      params: { path: { token } }
+    })
+    
+    if (err) {
       if (response.status === 404) throw new Error('Invite not found or link expired')
       throw new Error('Failed to load invite details')
     }
-    invite.value = await response.json()
-    if (invite.value?.current_state !== 'pending') {
-      responded.value = true
-      actionTaken.value = invite.value?.current_state === 'accepted' ? 'accepted' : 'declined'
+    
+    if (data) {
+      invite.value = data
+      if (invite.value.current_state !== 'pending') {
+        responded.value = true
+        actionTaken.value = invite.value.current_state === 'accepted' ? 'accepted' : 'declined'
+      }
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error'
@@ -37,19 +44,18 @@ async function fetchInvite() {
 async function respond(action: 'accept' | 'decline') {
   loading.value = true
   try {
-    const response = await fetch(`/api/respond/${token}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action }),
+    const { error: err } = await client.POST('/respond/{token}', {
+      params: { path: { token } },
+      body: { action }
     })
 
-    if (!response.ok) throw new Error('Failed to record response')
+    if (err) throw err
     
     responded.value = true
     actionTaken.value = action === 'accept' ? 'accepted' : 'declined'
     notify.success(`Response recorded: ${action}`)
   } catch (err) {
-    notify.error(err instanceof Error ? err.message : 'An unexpected error occurred')
+    // Middleware handles toasts
   } finally {
     loading.value = false
   }

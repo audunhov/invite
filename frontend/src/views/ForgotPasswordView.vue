@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { client } from '../utils/api'
 import { notify } from '../utils/toast'
 
 const email = ref('')
@@ -12,22 +13,16 @@ async function requestReset() {
   error.value = null
   success.value = false
   try {
-    const response = await fetch('/api/auth/forgot-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.value }),
+    const { error: err } = await client.POST('/auth/forgot-password', {
+      body: { email: email.value }
     })
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}))
-      throw new Error(errData.message || 'Request failed')
-    }
+    if (err) throw err
 
     success.value = true
     notify.success('Reset link sent')
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'An unexpected error occurred'
-    notify.error(error.value)
   } finally {
     loading.value = false
   }
