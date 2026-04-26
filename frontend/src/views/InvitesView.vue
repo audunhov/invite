@@ -65,6 +65,40 @@ const isStatusModalOpen = ref(false)
 const statusReport = ref<InviteStatusReport | null>(null)
 const loadingStatus = ref(false)
 
+// Recipient Search & Filtering
+const recipientSearchQuery = ref('')
+
+const unifiedRecipients = computed(() => {
+  const all: any[] = [
+    ...persons.value.map(p => ({ ...p, type: 'person' })),
+    ...groups.value.map(g => ({ ...g, type: 'group' }))
+  ]
+  
+  if (!recipientSearchQuery.value) return all
+  
+  const query = recipientSearchQuery.value.toLowerCase()
+  return all.filter(r => 
+    r.name.toLowerCase().includes(query) || 
+    (r.email && r.email.toLowerCase().includes(query)) ||
+    r.type === query
+  )
+})
+
+const selectedChips = computed(() => {
+  // Use either the wizard draft form or the standalone phase modal form
+  const currentIds = isInviteModalOpen.value 
+    ? draftPhaseForm.selectedRecipientIds 
+    : phaseForm.selectedRecipientIds
+    
+  return currentIds.map(id => {
+    const p = persons.value.find(p => p.id === id)
+    if (p) return { id, name: p.name, type: 'person' }
+    const g = groups.value.find(g => g.id === id)
+    if (g) return { id, name: g.name, type: 'group' }
+    return { id, name: 'Unknown', type: 'unknown' }
+  })
+})
+
 async function fetchData() {
   loading.value = true
   try {
@@ -106,11 +140,15 @@ function moveRecipient(index: number, direction: number) {
 }
 
 function toggleRecipient(id: string) {
-  const index = phaseForm.selectedRecipientIds.indexOf(id)
+  const currentIds = isInviteModalOpen.value 
+    ? draftPhaseForm.selectedRecipientIds 
+    : phaseForm.selectedRecipientIds
+    
+  const index = currentIds.indexOf(id)
   if (index > -1) {
-    phaseForm.selectedRecipientIds.splice(index, 1)
+    currentIds.splice(index, 1)
   } else {
-    phaseForm.selectedRecipientIds.push(id)
+    currentIds.push(id)
   }
 }
 
@@ -641,11 +679,43 @@ onMounted(fetchData)
                 </div>
 
                 <div class="mb-4">
-                  <label class="block text-xs font-medium text-indigo-700 dark:text-indigo-400 uppercase mb-1">Recipients</label>
-                  <div class="max-h-40 overflow-y-auto border dark:border-white/10 rounded p-2 bg-white dark:bg-gray-900">
-                    <div v-for="p in persons" :key="p.id" class="flex items-center mb-1">
-                      <input type="checkbox" :value="p.id" v-model="draftPhaseForm.selectedRecipientIds" class="mr-2" />
-                      <span class="text-sm">{{ p.name }}</span>
+                  <label class="block text-xs font-medium text-indigo-700 dark:text-indigo-400 uppercase mb-2">Recipients Selection</label>
+                  
+                  <!-- Search Bar -->
+                  <div class="relative mb-3">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <svg class="size-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-width="2" /></svg>
+                    </div>
+                    <input type="text" v-model="recipientSearchQuery" placeholder="Search by name or email..." 
+                      class="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md leading-5 bg-white dark:bg-gray-900 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" />
+                  </div>
+
+                  <!-- Chips Tray -->
+                  <div v-if="selectedChips.length > 0" class="flex flex-wrap gap-2 mb-3 max-h-20 overflow-y-auto p-1">
+                    <span v-for="chip in selectedChips" :key="chip.id" 
+                      class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase transition-all shadow-sm"
+                      :class="chip.type === 'group' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' : 'bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300'">
+                      {{ chip.name }}
+                      <button @click="toggleRecipient(chip.id)" class="hover:text-red-500 ml-1">×</button>
+                    </span>
+                  </div>
+
+                  <!-- Filtered List -->
+                  <div class="max-h-40 overflow-y-auto border dark:border-white/10 rounded-lg bg-white dark:bg-gray-900 divide-y dark:divide-white/5">
+                    <div v-for="r in unifiedRecipients" :key="r.id" 
+                      @click="toggleRecipient(r.id)"
+                      class="flex items-center justify-between p-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                      :class="draftPhaseForm.selectedRecipientIds.includes(r.id) ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''">
+                      <div class="flex flex-col">
+                        <span class="text-sm font-medium" :class="draftPhaseForm.selectedRecipientIds.includes(r.id) ? 'text-indigo-600 dark:text-indigo-400' : ''">{{ r.name }}</span>
+                        <span class="text-[10px] text-gray-500">{{ r.type === 'group' ? 'Group' : r.email }}</span>
+                      </div>
+                      <div v-if="draftPhaseForm.selectedRecipientIds.includes(r.id)" class="text-indigo-600">
+                        <svg class="size-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                      </div>
+                    </div>
+                    <div v-if="unifiedRecipients.length === 0" class="p-4 text-center text-xs text-gray-500 italic">
+                      No recipients match your search.
                     </div>
                   </div>
                 </div>
@@ -740,18 +810,44 @@ onMounted(fetchData)
               </div>
 
               <div class="mb-4">
-                <label class="block text-xs font-medium text-gray-500 uppercase mb-2">Available Recipients</label>
-                <div class="max-h-32 overflow-y-auto border dark:border-white/10 rounded p-2 bg-white dark:bg-gray-800">
-                  <div v-for="p in persons" :key="p.id" class="flex items-center mb-1">
-                    <input type="checkbox" :checked="phaseForm.selectedRecipientIds.includes(p.id)" @change="toggleRecipient(p.id)" class="mr-2" />
-                    <span class="text-sm">{{ p.name }} (Person)</span>
+                <label class="block text-xs font-medium text-gray-500 uppercase mb-2">Recipients Selection</label>
+                
+                <!-- Search Bar -->
+                <div class="relative mb-3">
+                  <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg class="size-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-width="2" /></svg>
                   </div>
-                  <template v-if="phaseForm.strategy_kind === 'sprint'">
-                    <div v-for="g in groups" :key="g.id" class="flex items-center mb-1">
-                      <input type="checkbox" :checked="phaseForm.selectedRecipientIds.includes(g.id)" @change="toggleRecipient(g.id)" class="mr-2" />
-                      <span class="text-sm">{{ g.name }} (Group)</span>
+                  <input type="text" v-model="recipientSearchQuery" placeholder="Search by name or email..." 
+                    class="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md leading-5 bg-white dark:bg-gray-900 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" />
+                </div>
+
+                <!-- Chips Tray -->
+                <div v-if="selectedChips.length > 0" class="flex flex-wrap gap-2 mb-3 max-h-20 overflow-y-auto p-1">
+                  <span v-for="chip in selectedChips" :key="chip.id" 
+                    class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase transition-all shadow-sm"
+                    :class="chip.type === 'group' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' : 'bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300'">
+                    {{ chip.name }}
+                    <button @click="toggleRecipient(chip.id)" class="hover:text-red-500 ml-1">×</button>
+                  </span>
+                </div>
+
+                <!-- Filtered List -->
+                <div class="max-h-32 overflow-y-auto border dark:border-white/10 rounded-lg bg-white dark:bg-gray-900 divide-y dark:divide-white/5">
+                  <div v-for="r in unifiedRecipients" :key="r.id" 
+                    @click="toggleRecipient(r.id)"
+                    class="flex items-center justify-between p-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                    :class="phaseForm.selectedRecipientIds.includes(r.id) ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''">
+                    <div class="flex flex-col">
+                      <span class="text-sm font-medium" :class="phaseForm.selectedRecipientIds.includes(r.id) ? 'text-indigo-600 dark:text-indigo-400' : ''">{{ r.name }}</span>
+                      <span class="text-[10px] text-gray-500">{{ r.type === 'group' ? 'Group' : r.email }}</span>
                     </div>
-                  </template>
+                    <div v-if="phaseForm.selectedRecipientIds.includes(r.id)" class="text-indigo-600">
+                      <svg class="size-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                    </div>
+                  </div>
+                  <div v-if="unifiedRecipients.length === 0" class="p-4 text-center text-xs text-gray-500 italic">
+                    No recipients match your search.
+                  </div>
                 </div>
               </div>
 
