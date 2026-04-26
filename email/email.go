@@ -25,16 +25,25 @@ func (s *Service) SendRaw(toEmail, subject, body string) error {
 		return nil
 	}
 
-	auth := smtp.PlainAuth("", s.cfg.SMTPUser, s.cfg.SMTPPass, s.cfg.SMTPHost)
+	from := s.cfg.SMTPUser
+	if from == "" {
+		from = "no-reply@example.com"
+	}
+
+	var auth smtp.Auth
+	if s.cfg.SMTPUser != "" {
+		auth = smtp.PlainAuth("", s.cfg.SMTPUser, s.cfg.SMTPPass, s.cfg.SMTPHost)
+	}
+
 	to := []string{toEmail}
 	msg := []byte(fmt.Sprintf("To: %s\r\n"+
 		"From: %s\r\n"+
 		"Subject: %s\r\n"+
 		"\r\n"+
 		"%s",
-		toEmail, s.cfg.SMTPUser, subject, body))
+		toEmail, from, subject, body))
 
-	return smtp.SendMail(fmt.Sprintf("%s:%d", s.cfg.SMTPHost, s.cfg.SMTPPort), auth, s.cfg.SMTPUser, to, msg)
+	return smtp.SendMail(fmt.Sprintf("%s:%d", s.cfg.SMTPHost, s.cfg.SMTPPort), auth, from, to, msg)
 }
 
 func (s *Service) LogAndSend(ctx context.Context, queries *db.Queries, inviteeID uuid.NullUUID, toEmail, subject, body string) error {
